@@ -615,4 +615,107 @@ public abstract class BaseCreateService<C, E extends Identifiable> {
 }
 ```
 
-##
+## Implementing the endpoints
+
+Now to implement each endpoint we need the following per (I will use the `league` endpoint as an example):
+
+1. An entity class to represent the entity that will be stored in the repository.
+```java
+public record League(
+        UUID id,
+        String name
+) implements Identifiable {
+}
+```
+
+2. A class to represent the request body for the endpoint.
+```java
+public record CreateLeagueRequest(
+
+        @NotBlank(message = "must not be blank")
+        @Size(max = 200, message = "must not exceed 200 characters")
+        String name
+
+) {
+}
+```
+
+3. A class to represent the response body for the endpoint.
+```java
+public record LeagueResponse(
+        UUID id,
+        String name
+) {
+}
+```
+
+4. A mapper class to map the command class to the entity class.
+```java
+@Component
+public class LeagueMapper {
+
+    public League toEntity(UUID id, CreateLeagueRequest request) {
+        return new League(id, request.name());
+    }
+
+    public LeagueResponse toResponse(League entity) {
+        return new LeagueResponse(entity.id(), entity.name());
+    }
+}
+```
+
+
+5. A service class that extends the `BaseCreateService` class to handle the business logic for the endpoint.
+```java
+@Service
+public class LeagueService
+        extends BaseCreateService<CreateLeagueRequest, League> {
+
+    private final LeagueMapper mapper;
+
+    public LeagueService(
+            CreateRepository<League> repository,
+            LeagueMapper mapper
+    ) {
+        super(repository);
+        this.mapper = mapper;
+    }
+
+    @Override
+    protected League newEntity(UUID id, CreateLeagueRequest command) {
+        return mapper.toEntity(id, command);
+    }
+}
+```
+
+6. A controller class to handle the HTTP requests for the endpoint.
+```java
+@RestController
+@RequestMapping(
+        value = "/api/v1/leagues",
+        produces = MediaType.APPLICATION_JSON_VALUE
+)
+public class LeagueController {
+
+    private final LeagueService service;
+    private final LeagueMapper mapper;
+
+    public LeagueController(
+            LeagueService service,
+            LeagueMapper mapper
+    ) {
+        this.service = service;
+        this.mapper = mapper;
+    }
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<LeagueResponse>> create(
+            @Valid @RequestBody CreateLeagueRequest request
+    ) {
+        League entity = service.create(request);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(mapper.toResponse(entity)));
+    }
+}
+```
