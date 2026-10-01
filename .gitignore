@@ -1,0 +1,18 @@
+# Maven
+target/
+
+# VS Code
+.vscode/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Operating system files
+.DS_Store
+Thumbs.db

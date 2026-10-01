@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: footknow-api
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+  mvc:
+    problemdetails:
+      enabled: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.footknow.football: INFO
