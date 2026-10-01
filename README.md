@@ -495,4 +495,124 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 }
 ```
 
-e
+## Storage abstraction and base service
+
+No db implementation yet. The in-memory adapter we are making in this step is just for dev and testing purposes. The idea is to have a storage abstraction that can be implemented with different storage backends (e.g., in-memory, database, etc.) without changing the service layer.
+
+First we make an `Identifiable.java` interface to represent an entity that has an identifier:
+
+```java
+public interface Identifiable {
+
+    UUID id();
+}
+```
+
+We then make a `CreateRepository.java` interface to represent a repository that can create entities:
+
+```java
+
+public interface CreateRepository<E extends Identifiable> {
+
+    /**
+     * Creates a new entity.
+     *
+     * Implementations must reject an existing ID rather than
+     * overwrite its entity. The duplicate check and insertion
+     * must be atomic.
+     *
+     * @throws com.footknow.api.common.error.ApiException
+     *         with CONFLICT when the ID already exists
+     */
+    E create(E entity);
+
+    /**
+     * Finds an entity by its application-level ID.
+     */
+    Optional<E> findById(UUID id);
+}
+```
+
+For development before having a valid database implementation, we can create an in-memory implementation of the `CreateRepository` interface. This implementation will use a `ConcurrentHashMap` to store entities in memory.
+
+```java
+public class InMemoryCreateRepositoryTest<E extends Identifiable>
+        implements CreateRepository<E> {
+
+    private final ConcurrentMap<UUID, E> entities =
+            new ConcurrentHashMap<>();
+
+    @Override
+    public E create(E entity) {
+        Objects.requireNonNull(entity, "entity is required");
+
+        UUID id = Objects.requireNonNull(
+                entity.id(),
+                "entity ID is required"
+        );
+
+        E existing = entities.putIfAbsent(id, entity);
+
+        if (existing != null) {
+            throw new ApiException(ErrorCode.CONFLICT);
+        }
+
+        return entity;
+    }
+
+    @Override
+    public Optional<E> findById(UUID id) {
+        Objects.requireNonNull(id, "id is required");
+
+        return Optional.ofNullable(entities.get(id));
+    }
+}
+```
+
+Then to make use of our new in-memory implementation, we can create a `BaseCreateService.java` class that will use the `CreateRepository` class to create and find entities. This service will be used by the controllers to handle requests.
+
+```java
+public abstract class BaseCreateService<C, E extends Identifiable> {
+
+    private final CreateRepository<E> repository;
+
+    protected BaseCreateService(CreateRepository<E> repository) {
+        this.repository = Objects.requireNonNull(
+                repository,
+                "repository is required"
+        );
+    }
+
+    public E create(C command) {
+        Objects.requireNonNull(command, "command is required");
+
+        UUID id = UUID.randomUUID();
+
+        E entity = Objects.requireNonNull(
+                newEntity(id, command),
+                "newEntity must return an entity"
+        );
+
+        if (!id.equals(entity.id())) {
+            throw new IllegalStateException(
+                    "newEntity must preserve the generated ID"
+            );
+        }
+
+        return repository.create(entity);
+    }
+
+    public E findById(UUID id) {
+        Objects.requireNonNull(id, "id is required");
+
+        return repository.findById(id)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.NOT_FOUND)
+                );
+    }
+
+    protected abstract E newEntity(UUID id, C command);
+}
+```
+
+##
