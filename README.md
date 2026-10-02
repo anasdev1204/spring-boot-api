@@ -1090,7 +1090,7 @@ public enum RateLimitCategory {
 }
 ```
 
-Then we add a `RateLimitProperties.java` interface to represent a service that can check if a caller is rate limited. This interface will be used to check if a caller is rate limited before allowing them to access a rate limited service.
+Then we add a `RateLimitProperties.java` which will read the rate limit properties from the `application.yml` in the `app.rate-limit` namespace and validate them. This class will be used to configure the rate limit tiers and policies for the application.
 
 ```java
 @Validated
@@ -1171,7 +1171,7 @@ public record RateLimitProperties(
 }
 ```
 
-Then we add `RateLimitResolver.java` interface to represent a service that can resolve the rate limit tier for a caller. This interface will be used to determine the rate limit tier for a caller before allowing them to access a rate limited service.
+Then we add `RateLimitTierResolver.java` interface to represent a service that can resolve the rate limit tier for a caller. This interface will be used to determine the rate limit tier for a caller before allowing them to access a rate limited service. For now we will be using the hard-fixed application.yml configuration to resolve the rate limit tier for a caller. In the future we can implement a more dynamic approach to resolve the rate limit tier for a caller.
 
 ```java
 @Component
@@ -1192,7 +1192,7 @@ public class RateLimitTierResolver {
 }
 ```
 
-Then we add a `RateLimitDecision.java` class to represent a decision made by the rate limit service. This class will be used to indicate whether a caller is allowed to access a rate limited service or not.
+Then we add a `RateLimitDecision.java` class to represent a decision made by the rate limit service. This class does not have any behavior, it is just a data class that will be used to represent the decision made by the rate limit service. This class will be used by `RateLimitStore.java` to represent the decision made by the rate limit service.
 
 ```java
 public record RateLimitDecision(
@@ -1224,7 +1224,20 @@ public record RateLimitDecision(
 }
 ```
 
-We then add an in-memory rate limit store `InMemoryRateLimitStore.java` class to represent a service that can store rate limit information in memory. This class will be used to store rate limit information for callers in memory.
+```java
+public interface RateLimitStore {
+
+	/**
+	 * Atomically checks and consumes one request for a caller/category.
+	 *
+	 * Implementations must not perform a separate, non-atomic "check then
+	 * increment".
+	 */
+	RateLimitDecision tryAcquire(String callerId, RateLimitCategory category, RateLimitProperties.Policy policy);
+}
+```
+
+We then add an in-memory rate limit store `InMemoryRateLimitStore.java` class to represent a service that can store rate limit information in memory. This class is only intended for development before implementing a proper database implementation. It will be used to store rate limit information in memory and will be used by the `RateLimitInterceptor` class to determine if a caller is rate limited or not.
 
 ```java
 public final class InMemoryRateLimitStore implements RateLimitStore {
@@ -1429,7 +1442,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 }
 ```
 
-Finally we add a configuration `RateLimitConfiguration.java` class to register the `RateLimitInterceptor` with Spring MVC.
+Finally we add a configuration `RateLimitConfiguration.java` class to register the `RateLimitInterceptor` and use the `InMemoryRateLimitStore` for development and testing purposes by setting a profile that depends on the `production` attribute. In production, we will implement a proper database implementation of the `RateLimitStore` interface.
 
 ```java
 @Configuration(proxyBeanMethods = false)
