@@ -1488,3 +1488,5 @@ app:
           window: 1m
 ```
 
+We then need to add the `RateLimited` annotation to all of our controllers endpoints.
+We also need to expose the `retry-after` header in the `SecurityConfiguration.java` class to allow the client to know when they can retry the request after being rate limited.
