@@ -1,11 +1,7 @@
 package com.footknow.api.common.error;
 
 import com.footknow.api.common.response.ApiResponse;
-import com.footknow.api.common.security.CurrentCaller;
 import com.footknow.api.common.handler.GlobalExceptionHandler;
-import com.footknow.api.common.ratelimit.RateLimitInterceptor;
-import com.footknow.api.common.ratelimit.RateLimitProperties;
-import com.footknow.api.common.ratelimit.RateLimitTierResolver;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -13,9 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,35 +24,31 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.test.context.ContextConfiguration;
 
-@WebMvcTest(controllers = GlobalExceptionHandlerTest.TestController.class)
-@Import({GlobalExceptionHandler.class, GlobalExceptionHandlerTest.TestController.class})
+@WebMvcTest(
+        controllers = GlobalExceptionHandlerTest.TestController.class,
+        properties = {
+                "spring.jackson.deserialization.fail-on-unknown-properties=true"
+        }
+)
+@ContextConfiguration(classes = {
+        GlobalExceptionHandlerTest.TestController.class,
+        GlobalExceptionHandler.class
+})
+@AutoConfigureMockMvc(addFilters = false)
 class GlobalExceptionHandlerTest {
 
 	@Autowired
 	private MockMvc mockMvc;
 
-	@MockitoBean
-	private CurrentCaller currentCaller;
-
-	@MockitoBean
-	private RateLimitTierResolver rateLimitTierResolver;
-
-	@MockitoBean
-	private RateLimitInterceptor rateLimitInterceptor;
-
-	@MockitoBean
-	private RateLimitProperties rateLimitProperties;
-
 	private MockHttpServletRequestBuilder authenticatedPost(String path) {
-		return post(path)
-				.with(jwt().jwt(token -> token.subject("user_endpoint_test").claim("azp", "http://localhost:3000")));
+		return post(path);
 	}
 
 	private MockHttpServletRequestBuilder authenticatedGet(String path) {
-		return get(path)
-				.with(jwt().jwt(token -> token.subject("user_endpoint_test").claim("azp", "http://localhost:3000")));
+		return get(path);
 	}
 
 	@Test
