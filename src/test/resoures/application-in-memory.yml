@@ -1,0 +1,6 @@
+security:
+  clerk:
+    issuer: https://clerk.example.test
+    authorized-parties:
+      - http://localhost:3000
+    audience: ""

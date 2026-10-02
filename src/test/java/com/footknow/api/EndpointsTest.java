@@ -23,9 +23,14 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import static org.springframework.security.test.web.servlet.request
+        .SecurityMockMvcRequestPostProcessors.jwt;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -50,11 +55,19 @@ class FootballCreateEndpointsTest {
     @Autowired
     private CreateRepository<Coach> coachRepository;
 
+    private MockHttpServletRequestBuilder authenticatedPost(String path) {
+        return post(path)
+                .with(jwt().jwt(token -> token
+                        .subject("user_endpoint_test")
+                        .claim("azp", "http://localhost:3000")
+                ));
+        }
+
     @ParameterizedTest
     @ValueSource(strings = {"leagues", "teams", "players", "coaches"})
     void createsAndStoresResource(String resource) throws Exception {
         MvcResult result = mockMvc.perform(
-                        post("/api/v1/" + resource)
+                        authenticatedPost("/api/v1/" + resource)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                         {"name":"Example"}
@@ -93,7 +106,7 @@ class FootballCreateEndpointsTest {
     @ParameterizedTest
     @ValueSource(strings = {"leagues", "teams", "players", "coaches"})
     void rejectsBlankName(String resource) throws Exception {
-        mockMvc.perform(post("/api/v1/" + resource)
+        mockMvc.perform(authenticatedPost("/api/v1/" + resource)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"   "}
@@ -109,7 +122,7 @@ class FootballCreateEndpointsTest {
     @ParameterizedTest
     @ValueSource(strings = {"leagues", "teams", "players", "coaches"})
     void rejectsMissingName(String resource) throws Exception {
-        mockMvc.perform(post("/api/v1/" + resource)
+        mockMvc.perform(authenticatedPost("/api/v1/" + resource)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -124,7 +137,7 @@ class FootballCreateEndpointsTest {
                 Map.of("name", "x".repeat(201))
         );
 
-        mockMvc.perform(post("/api/v1/" + resource)
+        mockMvc.perform(authenticatedPost("/api/v1/" + resource)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest())
@@ -142,7 +155,7 @@ class FootballCreateEndpointsTest {
                 )
         );
 
-        mockMvc.perform(post("/api/v1/" + resource)
+        mockMvc.perform(authenticatedPost("/api/v1/" + resource)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest())
@@ -153,7 +166,7 @@ class FootballCreateEndpointsTest {
     @ParameterizedTest
     @ValueSource(strings = {"leagues", "teams", "players", "coaches"})
     void rejectsUnsupportedContentType(String resource) throws Exception {
-        mockMvc.perform(post("/api/v1/" + resource)
+        mockMvc.perform(authenticatedPost("/api/v1/" + resource)
                         .contentType(MediaType.TEXT_PLAIN)
                         .content("Example"))
                 .andExpect(status().isUnsupportedMediaType())

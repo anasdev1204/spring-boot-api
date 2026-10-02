@@ -42,3 +42,9 @@ logging:
   level:
     root: INFO
     com.footknow.football: INFO
+
+security:
+  clerk:
+    issuer: ${CLERK_ISSUER}
+    authorized-parties: ${CLERK_AUTHORIZED_PARTIES}
+    audience: ${CLERK_AUDIENCE:}
