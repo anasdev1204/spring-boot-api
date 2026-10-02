@@ -7,11 +7,13 @@ import com.footknow.api.common.handler.GlobalExceptionHandler;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,6 +25,10 @@ import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+
+import static org.springframework.security.test.web.servlet.request
+        .SecurityMockMvcRequestPostProcessors.jwt;
 
 @WebMvcTest(
         controllers = GlobalExceptionHandlerTest.TestController.class
@@ -36,9 +42,25 @@ class GlobalExceptionHandlerTest {
     @Autowired
     private MockMvc mockMvc;
 
+        private MockHttpServletRequestBuilder authenticatedPost(String path) {
+        return post(path)
+                .with(jwt().jwt(token -> token
+                        .subject("user_endpoint_test")
+                        .claim("azp", "http://localhost:3000")
+                ));
+        }
+
+        private MockHttpServletRequestBuilder authenticatedGet(String path) {
+        return get(path)
+                .with(jwt().jwt(token -> token
+                        .subject("user_endpoint_test")
+                        .claim("azp", "http://localhost:3000")
+                ));
+        }
+
     @Test
     void returnsSuccessEnvelope() throws Exception {
-        mockMvc.perform(post("/_test/validation")
+        mockMvc.perform(authenticatedPost("/_test/validation")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Example"}
@@ -52,7 +74,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void returnsFieldValidationErrors() throws Exception {
-        mockMvc.perform(post("/_test/validation")
+        mockMvc.perform(authenticatedPost("/_test/validation")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":""}
@@ -70,7 +92,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void returnsMalformedRequestForInvalidJson() throws Exception {
-        mockMvc.perform(post("/_test/validation")
+        mockMvc.perform(authenticatedPost("/_test/validation")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{"))
                 .andExpect(status().isBadRequest())
@@ -80,7 +102,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void rejectsUnknownJsonProperties() throws Exception {
-        mockMvc.perform(post("/_test/validation")
+        mockMvc.perform(authenticatedPost("/_test/validation")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -95,7 +117,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void returnsPresetNotFoundError() throws Exception {
-        mockMvc.perform(get("/_test/missing"))
+        mockMvc.perform(authenticatedGet("/_test/missing"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
@@ -105,7 +127,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void preservesMethodNotAllowedHeader() throws Exception {
-        mockMvc.perform(get("/_test/validation"))
+        mockMvc.perform(authenticatedGet("/_test/validation"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(header().string(
                         "Allow",
@@ -117,7 +139,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void hidesUnexpectedExceptionDetails() throws Exception {
-        mockMvc.perform(get("/_test/unexpected"))
+        mockMvc.perform(authenticatedGet("/_test/unexpected"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error.code")
                         .value("INTERNAL_ERROR"))
