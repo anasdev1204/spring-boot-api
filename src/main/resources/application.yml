@@ -73,3 +73,7 @@ app:
         WRITE:
           requests: 120
           window: 1m
+  idempotency:
+    max-entries: 1000
+    max-response-bytes: 65536
+    retention: 24h

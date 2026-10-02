@@ -43,7 +43,12 @@ public enum ErrorCode {
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "The idempotency key has already been used with a different request."),
 
 	IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT,
-			"A request with this idempotency key is still being processed.");
+			"A request with this idempotency key is still being processed."),
+
+	IDEMPOTENCY_OUTCOME_UNKNOWN(
+        HttpStatus.CONFLICT,
+        "The outcome of the original request cannot currently be confirmed."
+	);
 
 	private final HttpStatus status;
 	private final String message;
