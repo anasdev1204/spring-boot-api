@@ -17,145 +17,105 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InMemoryRateLimitStoreTest {
 
-    @Test
-    void rejectsAfterLimitAndResetsAtExpiration() {
-        AtomicLong now = new AtomicLong();
+	@Test
+	void rejectsAfterLimitAndResetsAtExpiration() {
+		AtomicLong now = new AtomicLong();
 
-        InMemoryRateLimitStore store =
-                new InMemoryRateLimitStore(10, now::get);
+		InMemoryRateLimitStore store = new InMemoryRateLimitStore(10, now::get);
 
-        RateLimitProperties.Policy policy =
-                new RateLimitProperties.Policy(2, Duration.ofMinutes(1));
+		RateLimitProperties.Policy policy = new RateLimitProperties.Policy(2, Duration.ofMinutes(1));
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        ).allowed()).isTrue();
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).allowed()).isTrue();
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        ).allowed()).isTrue();
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).allowed()).isTrue();
 
-        RateLimitDecision rejected = store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        );
+		RateLimitDecision rejected = store.tryAcquire("user_a", RateLimitCategory.WRITE, policy);
 
-        assertThat(rejected.allowed()).isFalse();
-        assertThat(rejected.retryAfterSeconds()).isEqualTo(60);
+		assertThat(rejected.allowed()).isFalse();
+		assertThat(rejected.retryAfterSeconds()).isEqualTo(60);
 
-        now.set(Duration.ofSeconds(45).toNanos());
+		now.set(Duration.ofSeconds(45).toNanos());
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        ).retryAfterSeconds()).isEqualTo(15);
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).retryAfterSeconds()).isEqualTo(15);
 
-        now.set(Duration.ofMinutes(1).toNanos());
+		now.set(Duration.ofMinutes(1).toNanos());
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        ).allowed()).isTrue();
-    }
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).allowed()).isTrue();
+	}
 
-    @Test
-    void roundsRetryDelayUpToWholeSeconds() {
-        AtomicLong now = new AtomicLong();
+	@Test
+	void roundsRetryDelayUpToWholeSeconds() {
+		AtomicLong now = new AtomicLong();
 
-        InMemoryRateLimitStore store =
-                new InMemoryRateLimitStore(10, now::get);
+		InMemoryRateLimitStore store = new InMemoryRateLimitStore(10, now::get);
 
-        RateLimitProperties.Policy policy =
-                new RateLimitProperties.Policy(1, Duration.ofSeconds(2));
+		RateLimitProperties.Policy policy = new RateLimitProperties.Policy(1, Duration.ofSeconds(2));
 
-        store.tryAcquire("user_a", RateLimitCategory.WRITE, policy);
+		store.tryAcquire("user_a", RateLimitCategory.WRITE, policy);
 
-        now.set(Duration.ofMillis(1100).toNanos());
+		now.set(Duration.ofMillis(1100).toNanos());
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        ).retryAfterSeconds()).isEqualTo(1);
-    }
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).retryAfterSeconds()).isEqualTo(1);
+	}
 
-    @Test
-    void separatesCallersAndCategories() {
-        InMemoryRateLimitStore store =
-                new InMemoryRateLimitStore(10, () -> 0L);
+	@Test
+	void separatesCallersAndCategories() {
+		InMemoryRateLimitStore store = new InMemoryRateLimitStore(10, () -> 0L);
 
-        RateLimitProperties.Policy policy =
-                new RateLimitProperties.Policy(1, Duration.ofMinutes(1));
+		RateLimitProperties.Policy policy = new RateLimitProperties.Policy(1, Duration.ofMinutes(1));
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        ).allowed()).isTrue();
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).allowed()).isTrue();
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.WRITE, policy
-        ).allowed()).isFalse();
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).allowed()).isFalse();
 
-        assertThat(store.tryAcquire(
-                "user_b", RateLimitCategory.WRITE, policy
-        ).allowed()).isTrue();
+		assertThat(store.tryAcquire("user_b", RateLimitCategory.WRITE, policy).allowed()).isTrue();
 
-        assertThat(store.tryAcquire(
-                "user_a", RateLimitCategory.READ, policy
-        ).allowed()).isTrue();
-    }
+		assertThat(store.tryAcquire("user_a", RateLimitCategory.READ, policy).allowed()).isTrue();
+	}
 
-    @Test
-    void failsClosedAtCapacityAndReclaimsExpiredWindows() {
-        AtomicLong now = new AtomicLong();
+	@Test
+	void failsClosedAtCapacityAndReclaimsExpiredWindows() {
+		AtomicLong now = new AtomicLong();
 
-        InMemoryRateLimitStore store =
-                new InMemoryRateLimitStore(1, now::get);
+		InMemoryRateLimitStore store = new InMemoryRateLimitStore(1, now::get);
 
-        RateLimitProperties.Policy policy =
-                new RateLimitProperties.Policy(1, Duration.ofSeconds(1));
+		RateLimitProperties.Policy policy = new RateLimitProperties.Policy(1, Duration.ofSeconds(1));
 
-        store.tryAcquire("user_a", RateLimitCategory.WRITE, policy);
+		store.tryAcquire("user_a", RateLimitCategory.WRITE, policy);
 
-        assertThatThrownBy(() -> store.tryAcquire(
-                "user_b", RateLimitCategory.WRITE, policy
-        )).isInstanceOfSatisfying(
-                ApiException.class,
-                exception -> assertThat(exception.errorCode())
-                        .isEqualTo(ErrorCode.SERVICE_UNAVAILABLE)
-        );
+		assertThatThrownBy(() -> store.tryAcquire("user_b", RateLimitCategory.WRITE, policy)).isInstanceOfSatisfying(
+				ApiException.class,
+				exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.SERVICE_UNAVAILABLE));
 
-        now.set(Duration.ofSeconds(1).toNanos());
+		now.set(Duration.ofSeconds(1).toNanos());
 
-        assertThat(store.tryAcquire(
-                "user_b", RateLimitCategory.WRITE, policy
-        ).allowed()).isTrue();
-    }
+		assertThat(store.tryAcquire("user_b", RateLimitCategory.WRITE, policy).allowed()).isTrue();
+	}
 
-    @Test
-    void concurrentRequestsCannotExceedTheLimit() throws Exception {
-        InMemoryRateLimitStore store =
-                new InMemoryRateLimitStore(10, () -> 0L);
+	@Test
+	void concurrentRequestsCannotExceedTheLimit() throws Exception {
+		InMemoryRateLimitStore store = new InMemoryRateLimitStore(10, () -> 0L);
 
-        RateLimitProperties.Policy policy =
-                new RateLimitProperties.Policy(10, Duration.ofMinutes(1));
+		RateLimitProperties.Policy policy = new RateLimitProperties.Policy(10, Duration.ofMinutes(1));
 
-        List<Callable<Boolean>> tasks = new ArrayList<>();
+		List<Callable<Boolean>> tasks = new ArrayList<>();
 
-        for (int i = 0; i < 100; i++) {
-            tasks.add(() -> store.tryAcquire(
-                    "user_a",
-                    RateLimitCategory.WRITE,
-                    policy
-            ).allowed());
-        }
+		for (int i = 0; i < 100; i++) {
+			tasks.add(() -> store.tryAcquire("user_a", RateLimitCategory.WRITE, policy).allowed());
+		}
 
-        int accepted = 0;
+		int accepted = 0;
 
-        try (var executor = Executors.newFixedThreadPool(8)) {
-            List<Future<Boolean>> results = executor.invokeAll(tasks);
+		try (var executor = Executors.newFixedThreadPool(8)) {
+			List<Future<Boolean>> results = executor.invokeAll(tasks);
 
-            for (Future<Boolean> result : results) {
-                if (result.get()) {
-                    accepted++;
-                }
-            }
-        }
+			for (Future<Boolean> result : results) {
+				if (result.get()) {
+					accepted++;
+				}
+			}
+		}
 
-        assertThat(accepted).isEqualTo(10);
-    }
+		assertThat(accepted).isEqualTo(10);
+	}
 }

@@ -33,7 +33,8 @@ public enum ErrorCode {
 
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred."),
 
-	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE,"The service is temporarily unavailable. Please try again later.");
+	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE,
+			"The service is temporarily unavailable. Please try again later.");
 
 	private final HttpStatus status;
 	private final String message;

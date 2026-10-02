@@ -11,24 +11,19 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @EnableConfigurationProperties(RateLimitProperties.class)
 public class RateLimitConfiguration {
 
-    @Bean
-    @Profile("in-memory & !production")
-    public RateLimitStore inMemoryRateLimitStore(
-            RateLimitProperties properties
-    ) {
-        return new InMemoryRateLimitStore(properties.maxKeys());
-    }
+	@Bean
+	@Profile("in-memory & !production")
+	public RateLimitStore inMemoryRateLimitStore(RateLimitProperties properties) {
+		return new InMemoryRateLimitStore(properties.maxKeys());
+	}
 
-    @Bean
-    public WebMvcConfigurer rateLimitWebMvcConfigurer(
-            RateLimitInterceptor interceptor
-    ) {
-        return new WebMvcConfigurer() {
-            @Override
-            public void addInterceptors(InterceptorRegistry registry) {
-                registry.addInterceptor(interceptor)
-                        .addPathPatterns("/api/v1/**");
-            }
-        };
-    }
+	@Bean
+	public WebMvcConfigurer rateLimitWebMvcConfigurer(RateLimitInterceptor interceptor) {
+		return new WebMvcConfigurer() {
+			@Override
+			public void addInterceptors(InterceptorRegistry registry) {
+				registry.addInterceptor(interceptor).addPathPatterns("/api/v1/**");
+			}
+		};
+	}
 }

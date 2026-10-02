@@ -18,24 +18,14 @@ import java.util.List;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RateLimitExceptionHandler {
 
-    @ExceptionHandler(RateLimitExceededException.class)
-    public ResponseEntity<ApiResponse<Void>> handleRateLimit(
-            RateLimitExceededException exception
-    ) {
-        ErrorCode code = exception.errorCode();
+	@ExceptionHandler(RateLimitExceededException.class)
+	public ResponseEntity<ApiResponse<Void>> handleRateLimit(RateLimitExceededException exception) {
+		ErrorCode code = exception.errorCode();
 
-        ApiError error = new ApiError(
-                code.name(),
-                code.message(),
-                List.of()
-        );
+		ApiError error = new ApiError(code.name(), code.message(), List.of());
 
-        return ResponseEntity.status(code.status())
-                .header(
-                        HttpHeaders.RETRY_AFTER,
-                        Long.toString(exception.retryAfterSeconds())
-                )
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(ApiResponse.failure(error));
-    }
+		return ResponseEntity.status(code.status())
+				.header(HttpHeaders.RETRY_AFTER, Long.toString(exception.retryAfterSeconds()))
+				.header(HttpHeaders.CACHE_CONTROL, "no-store").body(ApiResponse.failure(error));
+	}
 }

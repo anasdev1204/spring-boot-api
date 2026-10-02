@@ -5,16 +5,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class RateLimitTierResolver {
 
-    private final RateLimitProperties properties;
+	private final RateLimitProperties properties;
 
-    public RateLimitTierResolver(RateLimitProperties properties) {
-        this.properties = properties;
-    }
+	public RateLimitTierResolver(RateLimitProperties properties) {
+		this.properties = properties;
+	}
 
-    public RateLimitTier resolve(String clerkUserId) {
-        return properties.userTiers().getOrDefault(
-                clerkUserId,
-                properties.defaultTier()
-        );
-    }
+	public RateLimitTier resolve(String clerkUserId) {
+		return properties.userTiers().getOrDefault(clerkUserId, properties.defaultTier());
+	}
 }
