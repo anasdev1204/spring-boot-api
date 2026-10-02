@@ -48,3 +48,28 @@ security:
     issuer: ${CLERK_ISSUER}
     authorized-parties: ${CLERK_AUTHORIZED_PARTIES}
     audience: ${CLERK_AUDIENCE:}
+
+app:
+  rate-limit:
+    default-tier: BASIC
+
+    max-keys: 10000
+
+    user-tiers: {}
+
+    policies:
+      BASIC:
+        READ:
+          requests: 120
+          window: 1m
+        WRITE:
+          requests: 30
+          window: 1m
+
+      PREMIUM:
+        READ:
+          requests: 600
+          window: 1m
+        WRITE:
+          requests: 120
+          window: 1m

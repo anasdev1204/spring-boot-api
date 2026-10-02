@@ -31,7 +31,9 @@ public enum ErrorCode {
 
 	REQUEST_REJECTED(HttpStatus.BAD_REQUEST, "The request could not be processed."),
 
-	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.");
+	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred."),
+
+	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE,"The service is temporarily unavailable. Please try again later.");
 
 	private final HttpStatus status;
 	private final String message;
