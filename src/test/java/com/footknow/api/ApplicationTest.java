@@ -10,24 +10,18 @@ import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
-)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ApplicationTest {
 
-    @Autowired
-    private TestRestTemplate restTemplate;
+	@Autowired
+	private TestRestTemplate restTemplate;
 
-    @Test
-    void healthEndpointReturnsUp() {
-        ResponseEntity<JsonNode> response = restTemplate.getForEntity(
-                "/actuator/health",
-                JsonNode.class
-        );
+	@Test
+	void healthEndpointReturnsUp() {
+		ResponseEntity<JsonNode> response = restTemplate.getForEntity("/actuator/health", JsonNode.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().path("status").asText())
-                .isEqualTo("UP");
-    }
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+		assertThat(response.getBody()).isNotNull();
+		assertThat(response.getBody().path("status").asText()).isEqualTo("UP");
+	}
 }

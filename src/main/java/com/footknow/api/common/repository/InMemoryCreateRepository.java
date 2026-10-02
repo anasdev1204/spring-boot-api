@@ -13,37 +13,32 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Development-only repository.
  *
- * Entities must be immutable because this implementation
- * stores and returns their references without defensive copying.
+ * Entities must be immutable because this implementation stores and returns
+ * their references without defensive copying.
  */
-public class InMemoryCreateRepository<E extends Identifiable>
-        implements CreateRepository<E> {
+public class InMemoryCreateRepository<E extends Identifiable> implements CreateRepository<E> {
 
-    private final ConcurrentMap<UUID, E> entities =
-            new ConcurrentHashMap<>();
+	private final ConcurrentMap<UUID, E> entities = new ConcurrentHashMap<>();
 
-    @Override
-    public E create(E entity) {
-        Objects.requireNonNull(entity, "entity is required");
+	@Override
+	public E create(E entity) {
+		Objects.requireNonNull(entity, "entity is required");
 
-        UUID id = Objects.requireNonNull(
-                entity.id(),
-                "entity ID is required"
-        );
+		UUID id = Objects.requireNonNull(entity.id(), "entity ID is required");
 
-        E existing = entities.putIfAbsent(id, entity);
+		E existing = entities.putIfAbsent(id, entity);
 
-        if (existing != null) {
-            throw new ApiException(ErrorCode.CONFLICT);
-        }
+		if (existing != null) {
+			throw new ApiException(ErrorCode.CONFLICT);
+		}
 
-        return entity;
-    }
+		return entity;
+	}
 
-    @Override
-    public Optional<E> findById(UUID id) {
-        Objects.requireNonNull(id, "id is required");
+	@Override
+	public Optional<E> findById(UUID id) {
+		Objects.requireNonNull(id, "id is required");
 
-        return Optional.ofNullable(entities.get(id));
-    }
+		return Optional.ofNullable(entities.get(id));
+	}
 }

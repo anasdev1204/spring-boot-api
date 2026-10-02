@@ -15,23 +15,19 @@ import java.io.IOException;
 @Component
 public class ApiAccessDeniedHandler implements AccessDeniedHandler {
 
-    private final BearerTokenAccessDeniedHandler bearerDeniedHandler =
-            new BearerTokenAccessDeniedHandler();
+	private final BearerTokenAccessDeniedHandler bearerDeniedHandler = new BearerTokenAccessDeniedHandler();
 
-    private final SecurityErrorWriter errorWriter;
+	private final SecurityErrorWriter errorWriter;
 
-    public ApiAccessDeniedHandler(SecurityErrorWriter errorWriter) {
-        this.errorWriter = errorWriter;
-    }
+	public ApiAccessDeniedHandler(SecurityErrorWriter errorWriter) {
+		this.errorWriter = errorWriter;
+	}
 
-    @Override
-    public void handle(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            AccessDeniedException exception
-    ) throws IOException {
-        bearerDeniedHandler.handle(request, response, exception);
+	@Override
+	public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException exception)
+			throws IOException {
+		bearerDeniedHandler.handle(request, response, exception);
 
-        errorWriter.write(response, ErrorCode.FORBIDDEN);
-    }
+		errorWriter.write(response, ErrorCode.FORBIDDEN);
+	}
 }

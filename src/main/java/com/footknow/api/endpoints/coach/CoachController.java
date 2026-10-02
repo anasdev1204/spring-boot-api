@@ -11,31 +11,22 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.footknow.api.common.response.ApiResponse;
 
-@RestController  
-@RequestMapping(
-        value = "/api/v1/coaches",
-        produces = MediaType.APPLICATION_JSON_VALUE
-)
+@RestController
+@RequestMapping(value = "/api/v1/coaches", produces = MediaType.APPLICATION_JSON_VALUE)
 public class CoachController {
-    
-    private final CoachService service;
-    private final CoachMapper mapper;
 
-    public CoachController(
-            CoachService service,
-            CoachMapper mapper
-    ) {
-        this.service = service;
-        this.mapper = mapper;
-    }
+	private final CoachService service;
+	private final CoachMapper mapper;
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<ApiResponse<CoachResponse>> create(
-            @Valid @RequestBody CreateCoachRequest request
-    ) {
-        Coach entity = service.create(request);
+	public CoachController(CoachService service, CoachMapper mapper) {
+		this.service = service;
+		this.mapper = mapper;
+	}
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(mapper.toResponse(entity)));
-    }
+	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<ApiResponse<CoachResponse>> create(@Valid @RequestBody CreateCoachRequest request) {
+		Coach entity = service.create(request);
+
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(mapper.toResponse(entity)));
+	}
 }

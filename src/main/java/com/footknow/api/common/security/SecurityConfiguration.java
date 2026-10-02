@@ -27,116 +27,69 @@ import java.util.List;
 @EnableConfigurationProperties(ClerkProperties.class)
 public class SecurityConfiguration {
 
-    @Bean
-    public JwtDecoder jwtDecoder(
-            ClerkProperties properties,
-            RestTemplateBuilder restTemplateBuilder
-    ) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder
-                .withJwkSetUri(properties.jwkSetUri())
-                .jwsAlgorithm(SignatureAlgorithm.RS256)
-                .restOperations(
-                        restTemplateBuilder
-                                .connectTimeout(Duration.ofSeconds(2))
-                                .readTimeout(Duration.ofSeconds(3))
-                                .build()
-                )
-                .build();
+	@Bean
+	public JwtDecoder jwtDecoder(ClerkProperties properties, RestTemplateBuilder restTemplateBuilder) {
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri())
+				.jwsAlgorithm(SignatureAlgorithm.RS256).restOperations(restTemplateBuilder
+						.connectTimeout(Duration.ofSeconds(2)).readTimeout(Duration.ofSeconds(3)).build())
+				.build();
 
-        decoder.setJwtValidator(new ClerkTokenValidator(properties));
+		decoder.setJwtValidator(new ClerkTokenValidator(properties));
 
-        return decoder;
-    }
+		return decoder;
+	}
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http,
-            JwtDecoder jwtDecoder,
-            CorsConfigurationSource corsConfigurationSource,
-            ApiAuthenticationEntryPointHandler authenticationEntryPoint,
-            ApiAccessDeniedHandler accessDeniedHandler
-    ) throws Exception {
-        JwtAuthenticationConverter authenticationConverter =
-                new JwtAuthenticationConverter();
+	@Bean
+	public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder,
+			CorsConfigurationSource corsConfigurationSource,
+			ApiAuthenticationEntryPointHandler authenticationEntryPoint, ApiAccessDeniedHandler accessDeniedHandler)
+			throws Exception {
+		JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
 
-        // TODO: Implement roles
-        authenticationConverter.setJwtGrantedAuthoritiesConverter(
-                jwt -> List.of()
-        );
+		// TODO: Implement roles
+		authenticationConverter.setJwtGrantedAuthoritiesConverter(jwt -> List.of());
 
-        http
-                .cors(cors -> cors.configurationSource(
-                        corsConfigurationSource
-                ))
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-                .requestCache(cache -> cache.disable())
-                .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable())
-                .logout(logout -> logout.disable())
-                .authorizeHttpRequests(authorize -> authorize
-                        // Allow internal error dispatch, not arbitrary
-                        // anonymous requests to the /error URL.
-                        .dispatcherTypeMatchers(DispatcherType.ERROR)
-                        .permitAll()
+		http.cors(cors -> cors.configurationSource(corsConfigurationSource)).csrf(csrf -> csrf.disable())
+				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.requestCache(cache -> cache.disable()).formLogin(form -> form.disable())
+				.httpBasic(basic -> basic.disable()).logout(logout -> logout.disable())
+				.authorizeHttpRequests(authorize -> authorize
+						// Allow internal error dispatch, not arbitrary
+						// anonymous requests to the /error URL.
+						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/actuator/health",
-                                "/actuator/health/liveness",
-                                "/actuator/health/readiness"
-                        )
-                        .permitAll()
+						.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness",
+								"/actuator/health/readiness")
+						.permitAll()
 
-                        .requestMatchers("/api/v1/**")
-                        .authenticated()
+						.requestMatchers("/api/v1/**").authenticated()
 
-                        .anyRequest()
-                        .denyAll()
-                )
-                .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler)
-                )
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler)
-                        .jwt(jwt -> jwt
-                                .decoder(jwtDecoder)
-                                .jwtAuthenticationConverter(
-                                        authenticationConverter
-                                )
-                        )
-                );
+						.anyRequest().denyAll())
+				.exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(authenticationEntryPoint)
+						.accessDeniedHandler(accessDeniedHandler))
+				.oauth2ResourceServer(resourceServer -> resourceServer
+						.authenticationEntryPoint(authenticationEntryPoint).accessDeniedHandler(accessDeniedHandler)
+						.jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)));
 
-        return http.build();
-    }
+		return http.build();
+	}
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource(
-            ClerkProperties properties
-    ) {
-        CorsConfiguration configuration = new CorsConfiguration();
+	@Bean
+	public CorsConfigurationSource corsConfigurationSource(ClerkProperties properties) {
+		CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(
-                List.copyOf(properties.authorizedParties())
-        );
+		configuration.setAllowedOrigins(List.copyOf(properties.authorizedParties()));
 
-        configuration.setAllowedMethods(List.of("POST", "OPTIONS"));
-        configuration.setAllowedHeaders(
-                List.of("Authorization", "Content-Type")
-        );
+		configuration.setAllowedMethods(List.of("POST", "OPTIONS"));
+		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
 
-        configuration.setAllowCredentials(false);
-        configuration.setMaxAge(3600L);
+		configuration.setAllowCredentials(false);
+		configuration.setMaxAge(3600L);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 
-        source.registerCorsConfiguration("/api/v1/**", configuration);
+		source.registerCorsConfiguration("/api/v1/**", configuration);
 
-        return source;
-    }
+		return source;
+	}
 }

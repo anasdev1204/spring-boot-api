@@ -7,25 +7,19 @@ import java.util.Objects;
  */
 public class ApiException extends RuntimeException {
 
-    private final ErrorCode errorCode;
+	private final ErrorCode errorCode;
 
-    public ApiException(ErrorCode errorCode) {
-        this(errorCode, null);
-    }
+	public ApiException(ErrorCode errorCode) {
+		this(errorCode, null);
+	}
 
-    public ApiException(ErrorCode errorCode, Throwable cause) {
-        super(
-                Objects.requireNonNull(
-                        errorCode,
-                        "errorCode is required"
-                ).message(),
-                cause
-        );
+	public ApiException(ErrorCode errorCode, Throwable cause) {
+		super(Objects.requireNonNull(errorCode, "errorCode is required").message(), cause);
 
-        this.errorCode = errorCode;
-    }
+		this.errorCode = errorCode;
+	}
 
-    public ErrorCode errorCode() {
-        return errorCode;
-    }
+	public ErrorCode errorCode() {
+		return errorCode;
+	}
 }

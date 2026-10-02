@@ -10,15 +10,15 @@ import java.util.UUID;
 @Service
 public class TeamService extends BaseCreateService<CreateTeamRequest, Team> {
 
-    private final TeamMapper mapper;
+	private final TeamMapper mapper;
 
-    public TeamService(CreateRepository<Team> repository, TeamMapper mapper) {
-        super(repository);
-        this.mapper = mapper;
-    }
-    
-    @Override
-    protected Team newEntity(UUID id, CreateTeamRequest command) {
-        return mapper.toEntity(id, command);
-    }
+	public TeamService(CreateRepository<Team> repository, TeamMapper mapper) {
+		super(repository);
+		this.mapper = mapper;
+	}
+
+	@Override
+	protected Team newEntity(UUID id, CreateTeamRequest command) {
+		return mapper.toEntity(id, command);
+	}
 }

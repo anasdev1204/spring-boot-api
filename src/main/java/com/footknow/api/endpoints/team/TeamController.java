@@ -10,32 +10,23 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-
 @RestController
-@RequestMapping (
-        value = "/api/v1/teams",
-        produces = MediaType.APPLICATION_JSON_VALUE
-)
+@RequestMapping(value = "/api/v1/teams", produces = MediaType.APPLICATION_JSON_VALUE)
 public class TeamController {
-    
-    private final TeamService service;
-    private final TeamMapper mapper;
 
-    public TeamController(
-            TeamService service,
-            TeamMapper mapper
-    ) {
-        this.service = service;
-        this.mapper = mapper;
-    }
+	private final TeamService service;
+	private final TeamMapper mapper;
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<ApiResponse<TeamResponse>> create(
-        @Valid @RequestBody CreateTeamRequest request) {
-        Team entity = service.create(request);
-        
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(mapper.toResponse(entity)));
-    }
-    
+	public TeamController(TeamService service, TeamMapper mapper) {
+		this.service = service;
+		this.mapper = mapper;
+	}
+
+	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<ApiResponse<TeamResponse>> create(@Valid @RequestBody CreateTeamRequest request) {
+		Team entity = service.create(request);
+
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(mapper.toResponse(entity)));
+	}
+
 }

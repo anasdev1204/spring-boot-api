@@ -13,27 +13,22 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 @Component
-public class ApiAuthenticationEntryPointHandler
-        implements AuthenticationEntryPoint {
+public class ApiAuthenticationEntryPointHandler implements AuthenticationEntryPoint {
 
-    private final BearerTokenAuthenticationEntryPoint bearerEntryPoint =
-            new BearerTokenAuthenticationEntryPoint();
+	private final BearerTokenAuthenticationEntryPoint bearerEntryPoint = new BearerTokenAuthenticationEntryPoint();
 
-    private final SecurityErrorWriter errorWriter;
+	private final SecurityErrorWriter errorWriter;
 
-    public ApiAuthenticationEntryPointHandler(SecurityErrorWriter errorWriter) {
-        this.errorWriter = errorWriter;
-    }
+	public ApiAuthenticationEntryPointHandler(SecurityErrorWriter errorWriter) {
+		this.errorWriter = errorWriter;
+	}
 
-    @Override
-    public void commence(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            AuthenticationException exception
-    ) throws IOException {
-        // Preserve the standard WWW-Authenticate bearer challenge.
-        bearerEntryPoint.commence(request, response, exception);
+	@Override
+	public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception)
+			throws IOException {
+		// Preserve the standard WWW-Authenticate bearer challenge.
+		bearerEntryPoint.commence(request, response, exception);
 
-        errorWriter.write(response, ErrorCode.UNAUTHORIZED);
-    }
+		errorWriter.write(response, ErrorCode.UNAUTHORIZED);
+	}
 }

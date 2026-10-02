@@ -11,30 +11,21 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping(
-        value = "/api/v1/players",
-        produces = MediaType.APPLICATION_JSON_VALUE
-)
+@RequestMapping(value = "/api/v1/players", produces = MediaType.APPLICATION_JSON_VALUE)
 public class PlayerController {
 
-    private final PlayerService service;
-    private final PlayerMapper mapper;
+	private final PlayerService service;
+	private final PlayerMapper mapper;
 
-    public PlayerController(
-            PlayerService service,
-            PlayerMapper mapper
-    ) {
-        this.service = service;
-        this.mapper = mapper;
-    }
+	public PlayerController(PlayerService service, PlayerMapper mapper) {
+		this.service = service;
+		this.mapper = mapper;
+	}
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<ApiResponse<PlayerResponse>> create(
-            @Valid @RequestBody CreatePlayerRequest request
-    ) {
-        Player entity = service.create(request);
+	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<ApiResponse<PlayerResponse>> create(@Valid @RequestBody CreatePlayerRequest request) {
+		Player entity = service.create(request);
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(mapper.toResponse(entity)));
-    }
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(mapper.toResponse(entity)));
+	}
 }

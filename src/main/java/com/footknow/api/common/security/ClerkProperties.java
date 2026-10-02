@@ -14,41 +14,31 @@ import java.util.Set;
  */
 @Validated
 @ConfigurationProperties(prefix = "security.clerk")
-public record ClerkProperties(
-        @NotBlank
-        String issuer,
+public record ClerkProperties(@NotBlank String issuer,
 
-        @NotEmpty
-        Set<@NotBlank String> authorizedParties,
+		@NotEmpty Set<@NotBlank String> authorizedParties,
 
-        String audience
-) {
+		String audience) {
 
-    @AssertTrue(message =
-            "Clerk issuer must be an HTTPS URL without credentials, query, or fragment")
-    public boolean isIssuerValid() {
-        if (issuer == null || issuer.isBlank()) {
-            return false;
-        }
+	@AssertTrue(message = "Clerk issuer must be an HTTPS URL without credentials, query, or fragment")
+	public boolean isIssuerValid() {
+		if (issuer == null || issuer.isBlank()) {
+			return false;
+		}
 
-        try {
-            URI uri = URI.create(issuer);
+		try {
+			URI uri = URI.create(issuer);
 
-            return "https".equalsIgnoreCase(uri.getScheme())
-                    && uri.getHost() != null
-                    && uri.getUserInfo() == null
-                    && uri.getQuery() == null
-                    && uri.getFragment() == null;
-        } catch (IllegalArgumentException exception) {
-            return false;
-        }
-    }
+			return "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null && uri.getUserInfo() == null
+					&& uri.getQuery() == null && uri.getFragment() == null;
+		} catch (IllegalArgumentException exception) {
+			return false;
+		}
+	}
 
-    public String jwkSetUri() {
-        String base = issuer.endsWith("/")
-                ? issuer.substring(0, issuer.length() - 1)
-                : issuer;
+	public String jwkSetUri() {
+		String base = issuer.endsWith("/") ? issuer.substring(0, issuer.length() - 1) : issuer;
 
-        return base + "/.well-known/jwks.json";
-    }
+		return base + "/.well-known/jwks.json";
+	}
 }

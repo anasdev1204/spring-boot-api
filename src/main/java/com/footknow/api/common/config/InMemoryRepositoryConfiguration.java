@@ -16,23 +16,23 @@ import org.springframework.context.annotation.Profile;
 @Profile("in-memory & !production")
 public class InMemoryRepositoryConfiguration {
 
-    @Bean
-    public CreateRepository<League> leagueRepository() {
-        return new InMemoryCreateRepository<>();
-    }
+	@Bean
+	public CreateRepository<League> leagueRepository() {
+		return new InMemoryCreateRepository<>();
+	}
 
-    @Bean
-    public CreateRepository<Team> teamRepository() {
-        return new InMemoryCreateRepository<>();
-    }
+	@Bean
+	public CreateRepository<Team> teamRepository() {
+		return new InMemoryCreateRepository<>();
+	}
 
-    @Bean
-    public CreateRepository<Player> playerRepository() {
-        return new InMemoryCreateRepository<>();
-    }
+	@Bean
+	public CreateRepository<Player> playerRepository() {
+		return new InMemoryCreateRepository<>();
+	}
 
-    @Bean
-    public CreateRepository<Coach> coachRepository() {
-        return new InMemoryCreateRepository<>();
-    }
+	@Bean
+	public CreateRepository<Coach> coachRepository() {
+		return new InMemoryCreateRepository<>();
+	}
 }

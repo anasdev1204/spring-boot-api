@@ -3,10 +3,7 @@ package com.footknow.api.endpoints.coach;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-public record CreateCoachRequest (
-        @NotBlank(message = "must not be blank")
-        @Size(max = 200, message = "must not exceed 200 characters")
-        String name
-) {
+public record CreateCoachRequest(
+		@NotBlank(message = "must not be blank") @Size(max = 200, message = "must not exceed 200 characters") String name) {
 
 }

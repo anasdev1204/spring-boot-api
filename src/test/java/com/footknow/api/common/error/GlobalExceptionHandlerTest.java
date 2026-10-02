@@ -3,7 +3,6 @@ package com.footknow.api.common.error;
 import com.footknow.api.common.response.ApiResponse;
 import com.footknow.api.common.handler.GlobalExceptionHandler;
 
-
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
@@ -26,157 +25,103 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
-import static org.springframework.security.test.web.servlet.request
-        .SecurityMockMvcRequestPostProcessors.jwt;
-
-@WebMvcTest(
-        controllers = GlobalExceptionHandlerTest.TestController.class
-)
-@Import({
-        GlobalExceptionHandler.class,
-        GlobalExceptionHandlerTest.TestController.class
-})
+@WebMvcTest(controllers = GlobalExceptionHandlerTest.TestController.class)
+@Import({GlobalExceptionHandler.class, GlobalExceptionHandlerTest.TestController.class})
 class GlobalExceptionHandlerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+	@Autowired
+	private MockMvc mockMvc;
 
-        private MockHttpServletRequestBuilder authenticatedPost(String path) {
-        return post(path)
-                .with(jwt().jwt(token -> token
-                        .subject("user_endpoint_test")
-                        .claim("azp", "http://localhost:3000")
-                ));
-        }
+	private MockHttpServletRequestBuilder authenticatedPost(String path) {
+		return post(path)
+				.with(jwt().jwt(token -> token.subject("user_endpoint_test").claim("azp", "http://localhost:3000")));
+	}
 
-        private MockHttpServletRequestBuilder authenticatedGet(String path) {
-        return get(path)
-                .with(jwt().jwt(token -> token
-                        .subject("user_endpoint_test")
-                        .claim("azp", "http://localhost:3000")
-                ));
-        }
+	private MockHttpServletRequestBuilder authenticatedGet(String path) {
+		return get(path)
+				.with(jwt().jwt(token -> token.subject("user_endpoint_test").claim("azp", "http://localhost:3000")));
+	}
 
-    @Test
-    void returnsSuccessEnvelope() throws Exception {
-        mockMvc.perform(authenticatedPost("/_test/validation")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Example"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.name").value("Example"))
-                .andExpect(jsonPath("$.error").doesNotExist())
-                .andExpect(jsonPath("$.timestamp").isNotEmpty());
-    }
+	@Test
+	void returnsSuccessEnvelope() throws Exception {
+		mockMvc.perform(authenticatedPost("/_test/validation").contentType(MediaType.APPLICATION_JSON).content("""
+				{"name":"Example"}
+				""")).andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.name").value("Example")).andExpect(jsonPath("$.error").doesNotExist())
+				.andExpect(jsonPath("$.timestamp").isNotEmpty());
+	}
 
-    @Test
-    void returnsFieldValidationErrors() throws Exception {
-        mockMvc.perform(authenticatedPost("/_test/validation")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":""}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.error.code")
-                        .value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.error.violations[0].field")
-                        .value("name"))
-                .andExpect(jsonPath("$.error.violations[0].message")
-                        .value("must not be blank"))
-                .andExpect(jsonPath("$.data").doesNotExist());
-    }
+	@Test
+	void returnsFieldValidationErrors() throws Exception {
+		mockMvc.perform(authenticatedPost("/_test/validation").contentType(MediaType.APPLICATION_JSON).content("""
+				{"name":""}
+				""")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+				.andExpect(jsonPath("$.error.violations[0].field").value("name"))
+				.andExpect(jsonPath("$.error.violations[0].message").value("must not be blank"))
+				.andExpect(jsonPath("$.data").doesNotExist());
+	}
 
-    @Test
-    void returnsMalformedRequestForInvalidJson() throws Exception {
-        mockMvc.perform(authenticatedPost("/_test/validation")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code")
-                        .value("MALFORMED_REQUEST"));
-    }
+	@Test
+	void returnsMalformedRequestForInvalidJson() throws Exception {
+		mockMvc.perform(authenticatedPost("/_test/validation").contentType(MediaType.APPLICATION_JSON).content("{"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"));
+	}
 
-    @Test
-    void rejectsUnknownJsonProperties() throws Exception {
-        mockMvc.perform(authenticatedPost("/_test/validation")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name":"Example",
-                                  "unexpected":true
-                                }
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code")
-                        .value("MALFORMED_REQUEST"));
-    }
+	@Test
+	void rejectsUnknownJsonProperties() throws Exception {
+		mockMvc.perform(authenticatedPost("/_test/validation").contentType(MediaType.APPLICATION_JSON).content("""
+				{
+				  "name":"Example",
+				  "unexpected":true
+				}
+				""")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"));
+	}
 
-    @Test
-    void returnsPresetNotFoundError() throws Exception {
-        mockMvc.perform(authenticatedGet("/_test/missing"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
-                .andExpect(jsonPath("$.error.message")
-                        .value("The requested resource was not found."));
-    }
+	@Test
+	void returnsPresetNotFoundError() throws Exception {
+		mockMvc.perform(authenticatedGet("/_test/missing")).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.success").value(false)).andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
+				.andExpect(jsonPath("$.error.message").value("The requested resource was not found."));
+	}
 
-    @Test
-    void preservesMethodNotAllowedHeader() throws Exception {
-        mockMvc.perform(authenticatedGet("/_test/validation"))
-                .andExpect(status().isMethodNotAllowed())
-                .andExpect(header().string(
-                        "Allow",
-                        containsString("POST")
-                ))
-                .andExpect(jsonPath("$.error.code")
-                        .value("METHOD_NOT_ALLOWED"));
-    }
+	@Test
+	void preservesMethodNotAllowedHeader() throws Exception {
+		mockMvc.perform(authenticatedGet("/_test/validation")).andExpect(status().isMethodNotAllowed())
+				.andExpect(header().string("Allow", containsString("POST")))
+				.andExpect(jsonPath("$.error.code").value("METHOD_NOT_ALLOWED"));
+	}
 
-    @Test
-    void hidesUnexpectedExceptionDetails() throws Exception {
-        mockMvc.perform(authenticatedGet("/_test/unexpected"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error.code")
-                        .value("INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.error.message")
-                        .value("An unexpected error occurred."))
-                .andExpect(content().string(
-                        not(containsString("private-database-details"))
-                ));
-    }
+	@Test
+	void hidesUnexpectedExceptionDetails() throws Exception {
+		mockMvc.perform(authenticatedGet("/_test/unexpected")).andExpect(status().isInternalServerError())
+				.andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"))
+				.andExpect(jsonPath("$.error.message").value("An unexpected error occurred."))
+				.andExpect(content().string(not(containsString("private-database-details"))));
+	}
 
-    @RestController
-    @RequestMapping("/_test")
-    public static class TestController {
+	@RestController
+	@RequestMapping("/_test")
+	public static class TestController {
 
-        @PostMapping("/validation")
-        public ApiResponse<TestRequest> validate(
-                @Valid @RequestBody TestRequest request
-        ) {
-            return ApiResponse.success(request);
-        }
+		@PostMapping("/validation")
+		public ApiResponse<TestRequest> validate(@Valid @RequestBody TestRequest request) {
+			return ApiResponse.success(request);
+		}
 
-        @GetMapping("/missing")
-        public void missing() {
-            throw new ApiException(ErrorCode.NOT_FOUND);
-        }
+		@GetMapping("/missing")
+		public void missing() {
+			throw new ApiException(ErrorCode.NOT_FOUND);
+		}
 
-        @GetMapping("/unexpected")
-        public void unexpected() {
-            throw new IllegalStateException(
-                    "private-database-details"
-            );
-        }
-    }
+		@GetMapping("/unexpected")
+		public void unexpected() {
+			throw new IllegalStateException("private-database-details");
+		}
+	}
 
-    public record TestRequest(
-            @NotBlank(message = "must not be blank")
-            String name
-    ) {
-    }
+	public record TestRequest(@NotBlank(message = "must not be blank") String name) {
+	}
 }

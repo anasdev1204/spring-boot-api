@@ -6,21 +6,17 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 @Service
-public class PlayerService
-        extends BaseCreateService<CreatePlayerRequest, Player> {
+public class PlayerService extends BaseCreateService<CreatePlayerRequest, Player> {
 
-    private final PlayerMapper mapper;
+	private final PlayerMapper mapper;
 
-    public PlayerService(
-            CreateRepository<Player> repository,
-            PlayerMapper mapper
-    ) {
-        super(repository);
-        this.mapper = mapper;
-    }
+	public PlayerService(CreateRepository<Player> repository, PlayerMapper mapper) {
+		super(repository);
+		this.mapper = mapper;
+	}
 
-    @Override
-    protected Player newEntity(UUID id, CreatePlayerRequest command) {
-        return mapper.toEntity(id, command);
-    }
+	@Override
+	protected Player newEntity(UUID id, CreatePlayerRequest command) {
+		return mapper.toEntity(id, command);
+	}
 }
