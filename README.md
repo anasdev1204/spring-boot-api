@@ -1620,3 +1620,414 @@ public class RequestFingerprint {
 }
 ```
 
+To make use of our basic setup we need to add a `IdempotencyProperties.java` class to represent a service that can read the idempotency properties from the `application.yml` in the `app.idempotency` namespace and validate them. This class will be used to configure the idempotency store for the application.
+
+```java
+@Validated
+@ConfigurationProperties(prefix = "app.idempotency")
+public record IdempotencyProperties(
+        @Min(1)
+        @Max(100_000)
+        int maxEntries,
+
+        @Min(1)
+        @Max(1_048_576)
+        int maxResponseBytes,
+
+        @NotNull
+        Duration retention
+) {
+
+    @AssertTrue(message =
+            "Idempotency retention must be between one second and seven days")
+    public boolean isRetentionValid() {
+        return retention != null
+                && retention.compareTo(Duration.ofSeconds(1)) >= 0
+                && retention.compareTo(Duration.ofDays(7)) <= 0;
+    }
+}
+```
+
+```yml
+app:
+  ...
+  idempotency:
+    max-entries: 10000
+    max-response-bytes: 1048576
+    retention: 1h
+```
+
+The objective from this idemponcy setup is to store the response of a request and return it if the same request is made again with the same idempotency key. So we first a `StoredHttpResponse` class to represent the stored HTTP response. This class will be used to store the response of a request in the idempotency store.
+
+```java
+public record StoredHttpResponse(
+        int status,
+        String contentType,
+        String location,
+        byte[] body
+) {
+
+    public StoredHttpResponse {
+        if (status < 200 || status > 599) {
+            throw new IllegalArgumentException(
+                    "A stored response must have a final HTTP status"
+            );
+        }
+
+        validateHeader(contentType, "contentType", 256);
+        validateHeader(location, "location", 4096);
+
+        body = Objects.requireNonNull(body, "body is required").clone();
+    }
+
+    @Override
+    public byte[] body() {
+        return body.clone();
+    }
+
+    public int bodySize() {
+        return body.length;
+    }
+
+    private static void validateHeader(
+            String value,
+            String name,
+            int maxLength
+    ) {
+        if (value == null) {
+            return;
+        }
+
+        if (value.isBlank()
+                || value.length() > maxLength
+                || value.indexOf('\r') >= 0
+                || value.indexOf('\n') >= 0) {
+            throw new IllegalArgumentException(
+                    name + " is invalid"
+            );
+        }
+    }
+}
+```
+
+We also need to add a `IdempotencyAcquisition.java` class to represent the result of an idempotency acquisition. This class will be used to represent the result of an idempotency acquisition from the idempotency store.
+
+```java
+
+public sealed interface IdempotencyAcquisition
+        permits IdempotencyAcquisition.Acquired,
+                IdempotencyAcquisition.Replay,
+                IdempotencyAcquisition.Rejected {
+
+    record Acquired(UUID ownerToken)
+            implements IdempotencyAcquisition {
+
+        public Acquired {
+            Objects.requireNonNull(
+                    ownerToken,
+                    "ownerToken is required"
+            );
+        }
+    }
+
+    record Replay(StoredHttpResponse response)
+            implements IdempotencyAcquisition {
+
+        public Replay {
+            Objects.requireNonNull(
+                    response,
+                    "response is required"
+            );
+        }
+    }
+
+    enum Rejected implements IdempotencyAcquisition {
+        REQUEST_MISMATCH,
+        IN_PROGRESS,
+        OUTCOME_UNKNOWN,
+        CAPACITY_EXHAUSTED
+    }
+}
+```
+
+Now that a response can be stored and the idempotency acquisition is defined, we need to add a `IdempotencyStore.java` interface to represent a service that can store idempotent responses. This interface will be used to store and retrieve idempotent responses from the idempotency store.
+
+```java
+package com.footknow.api.common.idempotency;
+
+import java.util.UUID;
+
+public interface IdempotencyStore {
+
+    /**
+     * Atomically reserves a previously unused scope or reports its state.
+     */
+    IdempotencyAcquisition acquire(
+            IdempotencyScope scope,
+            String fingerprint
+    );
+
+    /**
+     * Completes a reservation only if it is still in progress and
+     * owned by the supplied token.
+     */
+    CompletionResult complete(
+            IdempotencyScope scope,
+            UUID ownerToken,
+            StoredHttpResponse response
+    );
+
+    /**
+     * Blocks re-execution when the current owner cannot safely
+     * confirm the operation's outcome.
+     */
+    boolean markOutcomeUnknown(
+            IdempotencyScope scope,
+            UUID ownerToken
+    );
+
+    enum CompletionResult {
+        COMPLETED,
+        NOT_OWNER,
+        RESPONSE_TOO_LARGE
+    }
+}
+```
+
+For development purposes we will add an in-memory implementation of the `IdempotencyStore` interface with `InMemoryIdempotencyStore.java` class. This class will be used to store idempotent responses in memory for development and testing purposes.
+
+```java
+public final class InMemoryIdempotencyStore
+        implements IdempotencyStore {
+
+    private static final Pattern FINGERPRINT_PATTERN =
+            Pattern.compile("[0-9a-f]{64}");
+
+    private final int maxEntries;
+    private final int maxResponseBytes;
+    private final long retentionNanos;
+    private final LongSupplier ticker;
+
+    private final Map<IdempotencyScope, Entry> entries =
+            new HashMap<>();
+
+    public InMemoryIdempotencyStore(
+            int maxEntries,
+            int maxResponseBytes,
+            Duration retention
+    ) {
+        this(
+                maxEntries,
+                maxResponseBytes,
+                retention,
+                System::nanoTime
+        );
+    }
+
+    // Package-private for deterministic tests.
+    InMemoryIdempotencyStore(
+            int maxEntries,
+            int maxResponseBytes,
+            Duration retention,
+            LongSupplier ticker
+    ) {
+        if (maxEntries < 1 || maxEntries > 100_000) {
+            throw new IllegalArgumentException(
+                    "maxEntries is outside the supported range"
+            );
+        }
+
+        if (maxResponseBytes < 1 || maxResponseBytes > 1_048_576) {
+            throw new IllegalArgumentException(
+                    "maxResponseBytes is outside the supported range"
+            );
+        }
+
+        Objects.requireNonNull(retention, "retention is required");
+
+        if (retention.compareTo(Duration.ofSeconds(1)) < 0
+                || retention.compareTo(Duration.ofDays(7)) > 0) {
+            throw new IllegalArgumentException(
+                    "retention is outside the supported range"
+            );
+        }
+
+        this.maxEntries = maxEntries;
+        this.maxResponseBytes = maxResponseBytes;
+        this.retentionNanos = retention.toNanos();
+        this.ticker = Objects.requireNonNull(ticker);
+    }
+
+    @Override
+    public synchronized IdempotencyAcquisition acquire(
+            IdempotencyScope scope,
+            String fingerprint
+    ) {
+        Objects.requireNonNull(scope, "scope is required");
+        requireFingerprint(fingerprint);
+
+        long now = ticker.getAsLong();
+        Entry entry = entries.get(scope);
+
+        if (entry != null && isExpired(entry, now)) {
+            entries.remove(scope);
+            entry = null;
+        }
+
+        if (entry != null) {
+            if (!entry.fingerprint.equals(fingerprint)) {
+                return IdempotencyAcquisition.Rejected.REQUEST_MISMATCH;
+            }
+
+            return switch (entry.state) {
+                case IN_PROGRESS ->
+                        IdempotencyAcquisition.Rejected.IN_PROGRESS;
+
+                case COMPLETED ->
+                        new IdempotencyAcquisition.Replay(entry.response);
+
+                case OUTCOME_UNKNOWN ->
+                        IdempotencyAcquisition.Rejected.OUTCOME_UNKNOWN;
+            };
+        }
+
+        if (entries.size() >= maxEntries) {
+            removeExpiredEntries(now);
+        }
+
+        if (entries.size() >= maxEntries) {
+            return IdempotencyAcquisition.Rejected.CAPACITY_EXHAUSTED;
+        }
+
+        UUID ownerToken = UUID.randomUUID();
+
+        entries.put(scope, new Entry(fingerprint, ownerToken));
+
+        return new IdempotencyAcquisition.Acquired(ownerToken);
+    }
+
+    @Override
+    public synchronized CompletionResult complete(
+            IdempotencyScope scope,
+            UUID ownerToken,
+            StoredHttpResponse response
+    ) {
+        Objects.requireNonNull(scope, "scope is required");
+        Objects.requireNonNull(ownerToken, "ownerToken is required");
+        Objects.requireNonNull(response, "response is required");
+
+        Entry entry = entries.get(scope);
+
+        if (!isCurrentOwner(entry, ownerToken)) {
+            return CompletionResult.NOT_OWNER;
+        }
+
+        if (response.bodySize() > maxResponseBytes) {
+            // Execution may already have changed application state.
+            // Do not release the key and allow another execution.
+            entry.state = State.OUTCOME_UNKNOWN;
+
+            return CompletionResult.RESPONSE_TOO_LARGE;
+        }
+
+        entry.response = response;
+        entry.completedAtNanos = ticker.getAsLong();
+        entry.state = State.COMPLETED;
+
+        return CompletionResult.COMPLETED;
+    }
+
+    @Override
+    public synchronized boolean markOutcomeUnknown(
+            IdempotencyScope scope,
+            UUID ownerToken
+    ) {
+        Objects.requireNonNull(scope, "scope is required");
+        Objects.requireNonNull(ownerToken, "ownerToken is required");
+
+        Entry entry = entries.get(scope);
+
+        if (!isCurrentOwner(entry, ownerToken)) {
+            return false;
+        }
+
+        entry.state = State.OUTCOME_UNKNOWN;
+
+        return true;
+    }
+
+    private boolean isCurrentOwner(
+            Entry entry,
+            UUID ownerToken
+    ) {
+        return entry != null
+                && entry.state == State.IN_PROGRESS
+                && entry.ownerToken.equals(ownerToken);
+    }
+
+    private boolean isExpired(Entry entry, long now) {
+        return entry.state == State.COMPLETED
+                && now - entry.completedAtNanos >= retentionNanos;
+    }
+
+    private void removeExpiredEntries(long now) {
+        entries.entrySet().removeIf(
+                item -> isExpired(item.getValue(), now)
+        );
+    }
+
+    private void requireFingerprint(String fingerprint) {
+        if (fingerprint == null
+                || !FINGERPRINT_PATTERN.matcher(fingerprint).matches()) {
+            throw new IllegalArgumentException(
+                    "A lowercase SHA-256 fingerprint is required"
+            );
+        }
+    }
+
+    private enum State {
+        IN_PROGRESS,
+        COMPLETED,
+        OUTCOME_UNKNOWN
+    }
+
+    private static final class Entry {
+
+        private final String fingerprint;
+        private final UUID ownerToken;
+
+        private State state = State.IN_PROGRESS;
+        private StoredHttpResponse response;
+        private long completedAtNanos;
+
+        private Entry(
+                String fingerprint,
+                UUID ownerToken
+        ) {
+            this.fingerprint = fingerprint;
+            this.ownerToken = ownerToken;
+        }
+    }
+}
+```
+
+Now finally we need a configuration `IdempotencyConfiguration.java` class to register the `InMemoryIdempotencyStore` for development and testing purposes by setting a profile that depends on the `production` attribute. In production, we will implement a proper database implementation of the `IdempotencyStore` interface.
+
+```java
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(IdempotencyProperties.class)
+public class IdempotencyConfiguration {
+
+    @Bean
+    @Profile("in-memory & !production")
+    public IdempotencyStore inMemoryIdempotencyStore(
+            IdempotencyProperties properties
+    ) {
+        return new InMemoryIdempotencyStore(
+                properties.maxEntries(),
+                properties.maxResponseBytes(),
+                properties.retention()
+        );
+    }
+}
+```
