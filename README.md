@@ -1503,3 +1503,120 @@ app:
 
 We then need to add the `RateLimited` annotation to all of our controllers endpoints.
 We also need to expose the `retry-after` header in the `SecurityConfiguration.java` class to allow the client to know when they can retry the request after being rate limited.
+
+## Add idempotency
+
+Similar to how we previously proceeded we first start by adding a `Idempotent.java` interface to represent a idempotent service. This interface will be used to mark services that are idempotent.
+
+```java
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Idempotent {
+
+	String operation();
+}
+```
+
+Then we add a way to verify that the key exists in the headers and that it is the correct format with `IdempotencyKeyValidator.java` class. This class will be used to validate the idempotency key in the request headers.
+
+```java
+@Component
+public class IdempotencyKeyValidator {
+
+	public static final String HEADER_NAME = "Idempotency-Key";
+
+	private static final Pattern VALID_KEY = Pattern.compile("[A-Za-z0-9_-]{16,128}");
+
+	public String requireKey(HttpServletRequest request) {
+		Enumeration<String> values = request.getHeaders(HEADER_NAME);
+
+		if (values == null || !values.hasMoreElements()) {
+			throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_REQUIRED);
+		}
+
+		String key = values.nextElement();
+
+		if (values.hasMoreElements()) {
+			throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_INVALID);
+		}
+
+		if (key == null || key.length() < 16 || key.length() > 128 || !VALID_KEY.matcher(key).matches()) {
+			throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_INVALID);
+		}
+
+		return key;
+	}
+}
+```
+
+We also need a `IdempotencyScope.java` class to represent identity under which we will store an operation.
+
+```java
+public record IdempotencyScope(String callerId, String operation, String key) {
+
+	public IdempotencyScope {
+		requireNonBlank(callerId, "callerId");
+		requireNonBlank(operation, "operation");
+		requireNonBlank(key, "key");
+	}
+
+	private static void requireNonBlank(String value, String field) {
+		if (value == null || value.isBlank()) {
+			throw new IllegalArgumentException(field + " must not be blank");
+		}
+	}
+}
+```
+
+To wrap up the basic setup we need a `RequestFingerprinter.java` class to represent a service that can fingerprint a request and generate the unique key for it. This class will be used to generate a unique key for each request based on the request method, URI, query string, and body.
+
+```java
+@Component
+public class RequestFingerprint {
+
+	private static final String FORMAT_VERSION = "footknow-idempotency-fingerprint-v1";
+
+	public String calculate(String method, String requestUri, String queryString, byte[] body) {
+		Objects.requireNonNull(method, "method is required");
+		Objects.requireNonNull(requestUri, "requestUri is required");
+		Objects.requireNonNull(body, "body is required");
+
+		MessageDigest digest = sha256();
+
+		updateText(digest, FORMAT_VERSION);
+		updateText(digest, method.toUpperCase(Locale.ROOT));
+		updateText(digest, requestUri);
+		updateText(digest, queryString);
+		updateBytes(digest, body);
+
+		return HexFormat.of().formatHex(digest.digest());
+	}
+
+	private MessageDigest sha256() {
+		try {
+			return MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 is unavailable", exception);
+		}
+	}
+
+	private void updateText(MessageDigest digest, String value) {
+		if (value == null) {
+			updateLength(digest, -1);
+			return;
+		}
+
+		updateBytes(digest, value.getBytes(StandardCharsets.UTF_8));
+	}
+
+	private void updateBytes(MessageDigest digest, byte[] value) {
+		updateLength(digest, value.length);
+		digest.update(value);
+	}
+
+	private void updateLength(MessageDigest digest, int length) {
+		digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(length).array());
+	}
+}
+```
+
