@@ -12,43 +12,31 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @EnableConfigurationProperties(IdempotencyProperties.class)
 public class IdempotencyConfiguration {
 
-    @Bean
-    @Profile("in-memory & !production")
-    public IdempotencyStore inMemoryIdempotencyStore(
-            IdempotencyProperties properties
-    ) {
-        return new InMemoryIdempotencyStore(
-                properties.maxEntries(),
-                properties.maxResponseBytes(),
-                properties.retention()
-        );
-    }
+	@Bean
+	@Profile("in-memory & !production")
+	public IdempotencyStore inMemoryIdempotencyStore(IdempotencyProperties properties) {
+		return new InMemoryIdempotencyStore(properties.maxEntries(), properties.maxResponseBytes(),
+				properties.retention());
+	}
 
-    @Bean
-    public WebMvcConfigurer idempotencyWebMvcConfigurer(
-            IdempotencyRequestInterceptor interceptor
-    ) {
-        return new WebMvcConfigurer() {
-            @Override
-            public void addInterceptors(InterceptorRegistry registry) {
-                registry.addInterceptor(interceptor)
-                        .addPathPatterns("/api/v1/**")
-                        .order(200);
-            }
-        };
-    }
+	@Bean
+	public WebMvcConfigurer idempotencyWebMvcConfigurer(IdempotencyRequestInterceptor interceptor) {
+		return new WebMvcConfigurer() {
+			@Override
+			public void addInterceptors(InterceptorRegistry registry) {
+				registry.addInterceptor(interceptor).addPathPatterns("/api/v1/**").order(200);
+			}
+		};
+	}
 
-    @Bean
-    public FilterRegistrationBean<IdempotencyBodyWrappingFilter>
-    idempotencyFilterRegistration(
-            IdempotencyBodyWrappingFilter filter
-    ) {
-        FilterRegistrationBean<IdempotencyBodyWrappingFilter> registration =
-                new FilterRegistrationBean<>(filter);
+	@Bean
+	public FilterRegistrationBean<IdempotencyBodyWrappingFilter> idempotencyFilterRegistration(
+			IdempotencyBodyWrappingFilter filter) {
+		FilterRegistrationBean<IdempotencyBodyWrappingFilter> registration = new FilterRegistrationBean<>(filter);
 
-        // Installed explicitly inside Spring Security instead.
-        registration.setEnabled(false);
+		// Installed explicitly inside Spring Security instead.
+		registration.setEnabled(false);
 
-        return registration;
-    }
+		return registration;
+	}
 }

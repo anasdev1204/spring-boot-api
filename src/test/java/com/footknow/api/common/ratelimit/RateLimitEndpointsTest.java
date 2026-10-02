@@ -116,11 +116,7 @@ class RateLimitEndpointsTest {
 				.with(jwt().jwt(token -> token.subject(caller).claim("azp", "http://localhost:3000")))
 				.contentType(MediaType.APPLICATION_JSON).content("""
 						{"name":"Example"}
-						""")
-				.header(
-						"Idempotency-Key",
-						UUID.randomUUID().toString()
-				);
+						""").header("Idempotency-Key", UUID.randomUUID().toString());
 	}
 
 	private String newCaller() {

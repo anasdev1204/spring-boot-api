@@ -46,8 +46,7 @@ public class SecurityConfiguration {
 	public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder,
 			CorsConfigurationSource corsConfigurationSource,
 			ApiAuthenticationEntryPointHandler authenticationEntryPoint, ApiAccessDeniedHandler accessDeniedHandler,
-			IdempotencyBodyWrappingFilter idempotencyBodyWrappingFilter)
-			throws Exception {
+			IdempotencyBodyWrappingFilter idempotencyBodyWrappingFilter) throws Exception {
 		JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
 
 		// TODO: Implement roles
@@ -75,10 +74,7 @@ public class SecurityConfiguration {
 						.authenticationEntryPoint(authenticationEntryPoint).accessDeniedHandler(accessDeniedHandler)
 						.jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)));
 
-		http.addFilterAfter(
-				idempotencyBodyWrappingFilter,
-				AuthorizationFilter.class
-		);
+		http.addFilterAfter(idempotencyBodyWrappingFilter, AuthorizationFilter.class);
 
 		return http.build();
 	}
@@ -90,20 +86,9 @@ public class SecurityConfiguration {
 		configuration.setAllowedOrigins(List.copyOf(properties.authorizedParties()));
 
 		configuration.setAllowedMethods(List.of("POST", "OPTIONS"));
-		configuration.setAllowedHeaders(
-				List.of(
-						"Authorization",
-						"Content-Type",
-						"Idempotency-Key"
-				)
-		);
+		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
 
-		configuration.setExposedHeaders(
-				List.of(
-						"Retry-After",
-						"Idempotency-Replayed"
-				)
-		);
+		configuration.setExposedHeaders(List.of("Retry-After", "Idempotency-Replayed"));
 
 		configuration.setAllowCredentials(false);
 		configuration.setMaxAge(3600L);

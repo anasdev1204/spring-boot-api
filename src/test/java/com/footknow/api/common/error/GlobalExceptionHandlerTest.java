@@ -27,16 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.context.ContextConfiguration;
 
-@WebMvcTest(
-        controllers = GlobalExceptionHandlerTest.TestController.class,
-        properties = {
-                "spring.jackson.deserialization.fail-on-unknown-properties=true"
-        }
-)
-@ContextConfiguration(classes = {
-        GlobalExceptionHandlerTest.TestController.class,
-        GlobalExceptionHandler.class
-})
+@WebMvcTest(controllers = GlobalExceptionHandlerTest.TestController.class, properties = {
+		"spring.jackson.deserialization.fail-on-unknown-properties=true"})
+@ContextConfiguration(classes = {GlobalExceptionHandlerTest.TestController.class, GlobalExceptionHandler.class})
 @AutoConfigureMockMvc(addFilters = false)
 class GlobalExceptionHandlerTest {
 

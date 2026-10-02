@@ -14,90 +14,82 @@ import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
-public final class CachedBodyRequest
-        extends HttpServletRequestWrapper {
+public final class CachedBodyRequest extends HttpServletRequestWrapper {
 
-    private byte[] cachedBody;
+	private byte[] cachedBody;
 
-    public CachedBodyRequest(HttpServletRequest request) {
-        super(request);
-    }
+	public CachedBodyRequest(HttpServletRequest request) {
+		super(request);
+	}
 
-    public void prepare(int maxBytes) throws IOException {
-        if (cachedBody != null) {
-            return;
-        }
+	public void prepare(int maxBytes) throws IOException {
+		if (cachedBody != null) {
+			return;
+		}
 
-        if (getContentLengthLong() > maxBytes) {
-            throw new ApiException(ErrorCode.PAYLOAD_TOO_LARGE);
-        }
+		if (getContentLengthLong() > maxBytes) {
+			throw new ApiException(ErrorCode.PAYLOAD_TOO_LARGE);
+		}
 
-        byte[] bytes = super.getInputStream().readNBytes(maxBytes + 1);
+		byte[] bytes = super.getInputStream().readNBytes(maxBytes + 1);
 
-        if (bytes.length > maxBytes) {
-            throw new ApiException(ErrorCode.PAYLOAD_TOO_LARGE);
-        }
+		if (bytes.length > maxBytes) {
+			throw new ApiException(ErrorCode.PAYLOAD_TOO_LARGE);
+		}
 
-        cachedBody = bytes;
-    }
+		cachedBody = bytes;
+	}
 
-    public byte[] body() {
-        if (cachedBody == null) {
-            throw new IllegalStateException(
-                    "The request body has not been prepared"
-            );
-        }
+	public byte[] body() {
+		if (cachedBody == null) {
+			throw new IllegalStateException("The request body has not been prepared");
+		}
 
-        return cachedBody.clone();
-    }
+		return cachedBody.clone();
+	}
 
-    @Override
-    public ServletInputStream getInputStream() throws IOException {
-        if (cachedBody == null) {
-            return super.getInputStream();
-        }
+	@Override
+	public ServletInputStream getInputStream() throws IOException {
+		if (cachedBody == null) {
+			return super.getInputStream();
+		}
 
-        ByteArrayInputStream input =
-                new ByteArrayInputStream(cachedBody);
+		ByteArrayInputStream input = new ByteArrayInputStream(cachedBody);
 
-        return new ServletInputStream() {
-            @Override
-            public int read() {
-                return input.read();
-            }
+		return new ServletInputStream() {
+			@Override
+			public int read() {
+				return input.read();
+			}
 
-            @Override
-            public int read(byte[] bytes, int offset, int length) {
-                return input.read(bytes, offset, length);
-            }
+			@Override
+			public int read(byte[] bytes, int offset, int length) {
+				return input.read(bytes, offset, length);
+			}
 
-            @Override
-            public boolean isFinished() {
-                return input.available() == 0;
-            }
+			@Override
+			public boolean isFinished() {
+				return input.available() == 0;
+			}
 
-            @Override
-            public boolean isReady() {
-                return true;
-            }
+			@Override
+			public boolean isReady() {
+				return true;
+			}
 
-            @Override
-            public void setReadListener(ReadListener listener) {
-                throw new UnsupportedOperationException(
-                        "Non-blocking request reading is not supported"
-                );
-            }
-        };
-    }
+			@Override
+			public void setReadListener(ReadListener listener) {
+				throw new UnsupportedOperationException("Non-blocking request reading is not supported");
+			}
+		};
+	}
 
-    @Override
-    public BufferedReader getReader() throws IOException {
-        Charset charset = getCharacterEncoding() == null
-                ? StandardCharsets.UTF_8
-                : Charset.forName(getCharacterEncoding());
+	@Override
+	public BufferedReader getReader() throws IOException {
+		Charset charset = getCharacterEncoding() == null
+				? StandardCharsets.UTF_8
+				: Charset.forName(getCharacterEncoding());
 
-        return new BufferedReader(
-                new InputStreamReader(getInputStream(), charset)
-        );
-    }
+		return new BufferedReader(new InputStreamReader(getInputStream(), charset));
+	}
 }

@@ -27,7 +27,7 @@ public class PlayerController {
 		this.mapper = mapper;
 	}
 
-        @Idempotent (operation = "player.create.v1")
+	@Idempotent(operation = "player.create.v1")
 	@RateLimited(category = RateLimitCategory.WRITE)
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<ApiResponse<PlayerResponse>> create(@Valid @RequestBody CreatePlayerRequest request) {

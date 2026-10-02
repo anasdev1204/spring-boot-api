@@ -1,10 +1,6 @@
 package com.footknow.api.common.idempotency;
 
-public record IdempotencyRequestContext(
-        IdempotencyScope scope,
-        String fingerprint
-) {
+public record IdempotencyRequestContext(IdempotencyScope scope, String fingerprint) {
 
-    public static final String ATTRIBUTE =
-            IdempotencyRequestContext.class.getName();
+	public static final String ATTRIBUTE = IdempotencyRequestContext.class.getName();
 }
