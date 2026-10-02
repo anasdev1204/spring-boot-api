@@ -719,3 +719,352 @@ public class LeagueController {
     }
 }
 ```
+
+## Adding security
+
+Now that we have a working API, we add security to it before detailing the endpoints. We will use Clerk for authentication and authorization. To do this we need to add the following dependencies to the `pom.xml` file:
+
+```xml
+<!-- Bearer-token authentication and JWT verification -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+</dependency>
+
+<!-- Mock authenticated requests in Spring MVC tests -->
+<dependency>
+    <groupId>org.springframework.security</groupId>
+    <artifactId>spring-security-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+We then configure clerk with `ClerkProperties.java` class which will read of the properties from the `application.yml` in the `security.clerk` namespace. The `issuer` property is the URL of the Clerk issuer, the `authorizedParties` property is a set of authorized parties that can access the API, and the `audience` property is an optional audience that can be used to validate the JWT. By adding the `@Validated` annotation, we can ensure that the properties are validated when the application starts.
+
+```java
+@Validated
+@ConfigurationProperties(prefix = "security.clerk")
+public record ClerkProperties(
+        @NotBlank
+        String issuer,
+
+        @NotEmpty
+        Set<@NotBlank String> authorizedParties,
+
+        String audience
+) {
+
+    @AssertTrue(message =
+            "Clerk issuer must be an HTTPS URL without credentials, query, or fragment")
+    public boolean isIssuerValid() {
+        if (issuer == null || issuer.isBlank()) {
+            return false;
+        }
+
+        try {
+            URI uri = URI.create(issuer);
+
+            return "https".equalsIgnoreCase(uri.getScheme())
+                    && uri.getHost() != null
+                    && uri.getUserInfo() == null
+                    && uri.getQuery() == null
+                    && uri.getFragment() == null;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    public String jwkSetUri() {
+        String base = issuer.endsWith("/")
+                ? issuer.substring(0, issuer.length() - 1)
+                : issuer;
+
+        return base + "/.well-known/jwks.json";
+    }
+}
+```
+
+To validate the JWT, we need to create a `ClerkTokenValidator.java` class that will implement the `OAuth2TokenValidator<Jwt>` interface. This class will validate the JWT by checking the issuer, audience, and authorized parties.
+
+```java
+public final class ClerkTokenValidator
+        implements OAuth2TokenValidator<Jwt> {
+
+    private static final OAuth2Error INVALID_TOKEN =
+            new OAuth2Error(
+                    "invalid_token",
+                    "The bearer token is invalid.",
+                    null
+            );
+
+    private final OAuth2TokenValidator<Jwt> standardValidator;
+    private final Set<String> authorizedParties;
+    private final String audience;
+
+    public ClerkTokenValidator(ClerkProperties properties) {
+        this.standardValidator =
+                JwtValidators.createDefaultWithIssuer(properties.issuer());
+
+        this.authorizedParties =
+                Set.copyOf(properties.authorizedParties());
+
+        this.audience = properties.audience();
+    }
+
+    @Override
+    public OAuth2TokenValidatorResult validate(Jwt token) {
+        OAuth2TokenValidatorResult standardResult =
+                standardValidator.validate(token);
+
+        if (standardResult.hasErrors()) {
+            return standardResult;
+        }
+
+        if (token.getExpiresAt() == null) {
+            return invalid();
+        }
+
+        Object subject = token.getClaims().get("sub");
+
+        if (!(subject instanceof String userId) || userId.isBlank()) {
+            return invalid();
+        }
+
+        Object authorizedParty = token.getClaims().get("azp");
+
+        if (!(authorizedParty instanceof String party)
+                || !authorizedParties.contains(party)) {
+            return invalid();
+        }
+
+        if (audience != null && !audience.isBlank()) {
+            if (token.getAudience() == null
+                    || !token.getAudience().contains(audience)) {
+                return invalid();
+            }
+        }
+
+        return OAuth2TokenValidatorResult.success();
+    }
+
+    private OAuth2TokenValidatorResult invalid() {
+        return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
+    }
+}
+```
+
+Since our previously defined `GlobalExceptionHandler` class sits on the controller level, we need to add a `SecurityErrorWriter.java` class that will be throwing security
+exceptions the same format as the rest of the API. It is important to do that since the security layer sits on top of the controller layer, so any security layer errors will stop the process and won't reach the controller layer.
+
+```java
+@Component
+public class SecurityErrorWriter {
+
+    private final ObjectMapper objectMapper;
+
+    public SecurityErrorWriter(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    public void write(
+            HttpServletResponse response,
+            ErrorCode errorCode
+    ) throws IOException {
+        ApiError error = new ApiError(
+                errorCode.name(),
+                errorCode.message(),
+                List.of()
+        );
+
+        response.setStatus(errorCode.status().value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+
+        objectMapper.writeValue(
+                response.getOutputStream(),
+                ApiResponse.failure(error)
+        );
+    }
+}
+```
+
+To make use of this `SecurityErrorWriter` class, we need to create to add components that will handle the api entrypoint security that will trigger when the request is not authenticated (no token, invalid JWT, etc.) with `ApiAuthenticationEntryPointHandler.java` and `ApiAccessDeniedHandler.java` that will trigger when the request is authenticated but not authorized (invalid scopes, etc.).
+
+```java
+@Component
+public class ApiAuthenticationEntryPointHandler
+        implements AuthenticationEntryPoint {
+
+    private final BearerTokenAuthenticationEntryPoint bearerEntryPoint =
+            new BearerTokenAuthenticationEntryPoint();
+
+    private final SecurityErrorWriter errorWriter;
+
+    public ApiAuthenticationEntryPoint(SecurityErrorWriter errorWriter) {
+        this.errorWriter = errorWriter;
+    }
+
+    @Override
+    public void commence(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AuthenticationException exception
+    ) throws IOException {
+        // Preserve the standard WWW-Authenticate bearer challenge.
+        bearerEntryPoint.commence(request, response, exception);
+
+        errorWriter.write(response, ErrorCode.UNAUTHORIZED);
+    }
+}
+```
+
+Now to wire all the security components together, we need to create a `SecurityConfiguration.java` class that will configure the security for the API. It will be composed of a `JWT Decoder` that will use the `ClerkProperties` to validate the JWT using the `jwkSetUri()` method previously defined. `SecurityFilterChain` will configure define the rules for incoming HTTP requests. It disables browser-style authentication, enables Stateless API, enable CORS, and configures the JWT decoder to validate the JWT. It also sets up the `ApiAuthenticationEntryPointHandler` and `ApiAccessDeniedHandler` to handle authentication and authorization errors.
+```java
+
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(ClerkProperties.class)
+public class SecurityConfiguration {
+
+    @Bean
+    public JwtDecoder jwtDecoder(
+            ClerkProperties properties,
+            RestTemplateBuilder restTemplateBuilder
+    ) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
+                .withJwkSetUri(properties.jwkSetUri())
+                .jwsAlgorithm(SignatureAlgorithm.RS256)
+                .restOperations(
+                        restTemplateBuilder
+                                .connectTimeout(Duration.ofSeconds(2))
+                                .readTimeout(Duration.ofSeconds(3))
+                                .build()
+                )
+                .build();
+
+        decoder.setJwtValidator(new ClerkTokenValidator(properties));
+
+        return decoder;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtDecoder jwtDecoder,
+            CorsConfigurationSource corsConfigurationSource,
+            ApiAuthenticationEntryPointHandler authenticationEntryPoint,
+            ApiAccessDeniedHandler accessDeniedHandler
+    ) throws Exception {
+        JwtAuthenticationConverter authenticationConverter =
+                new JwtAuthenticationConverter();
+
+        // TODO: Implement roles
+        authenticationConverter.setJwtGrantedAuthoritiesConverter(
+                jwt -> List.of()
+        );
+
+        http
+                .cors(cors -> cors.configurationSource(
+                        corsConfigurationSource
+                ))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .requestCache(cache -> cache.disable())
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
+                .logout(logout -> logout.disable())
+                .authorizeHttpRequests(authorize -> authorize
+                        // Allow internal error dispatch, not arbitrary
+                        // anonymous requests to the /error URL.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR)
+                        .permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/actuator/health",
+                                "/actuator/health/liveness",
+                                "/actuator/health/readiness"
+                        )
+                        .permitAll()
+
+                        .requestMatchers("/api/v1/**")
+                        .authenticated()
+
+                        .anyRequest()
+                        .denyAll()
+                )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                )
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                        .jwt(jwt -> jwt
+                                .decoder(jwtDecoder)
+                                .jwtAuthenticationConverter(
+                                        authenticationConverter
+                                )
+                        )
+                );
+
+        return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(
+            ClerkProperties properties
+    ) {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        configuration.setAllowedOrigins(
+                List.copyOf(properties.authorizedParties())
+        );
+
+        configuration.setAllowedMethods(List.of("POST", "OPTIONS"));
+        configuration.setAllowedHeaders(
+                List.of("Authorization", "Content-Type")
+        );
+
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/api/v1/**", configuration);
+
+        return source;
+    }
+}
+```
+
+Now to wrap up the security we need to expose the caller id so that it can be used in the service layer. We can do this by creating a `CurrentCaller.java` class.
+
+```java
+@Component
+public class CurrentCaller {
+
+    public String userId() {
+        Authentication authentication = SecurityContextHolder
+                .getContext()
+                .getAuthentication();
+
+        if (!(authentication instanceof JwtAuthenticationToken jwt)
+                || !jwt.isAuthenticated()) {
+            throw new ApiException(ErrorCode.UNAUTHORIZED);
+        }
+
+        String subject = jwt.getToken().getSubject();
+
+        if (subject == null || subject.isBlank()) {
+            throw new ApiException(ErrorCode.UNAUTHORIZED);
+        }
+
+        return subject;
+    }
+}
+```
+
