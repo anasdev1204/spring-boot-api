@@ -36,25 +36,14 @@ public enum ErrorCode {
 	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE,
 			"The service is temporarily unavailable. Please try again later."),
 
-	IDEMPOTENCY_KEY_REQUIRED(
-			HttpStatus.BAD_REQUEST,
-			"An Idempotency-Key header is required."
-	),
+	IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "An Idempotency-Key header is required."),
 
-	IDEMPOTENCY_KEY_INVALID(
-			HttpStatus.BAD_REQUEST,
-			"The Idempotency-Key header is invalid."
-	),
+	IDEMPOTENCY_KEY_INVALID(HttpStatus.BAD_REQUEST, "The Idempotency-Key header is invalid."),
 
-	IDEMPOTENCY_KEY_REUSED(
-			HttpStatus.CONFLICT,
-			"The idempotency key has already been used with a different request."
-	),
+	IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "The idempotency key has already been used with a different request."),
 
-	IDEMPOTENCY_REQUEST_IN_PROGRESS(
-			HttpStatus.CONFLICT,
-			"A request with this idempotency key is still being processed."
-	);
+	IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT,
+			"A request with this idempotency key is still being processed.");
 
 	private final HttpStatus status;
 	private final String message;
