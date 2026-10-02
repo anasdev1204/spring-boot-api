@@ -9,15 +9,10 @@ import org.springframework.context.annotation.Profile;
 @EnableConfigurationProperties(IdempotencyProperties.class)
 public class IdempotencyConfiguration {
 
-    @Bean
-    @Profile("in-memory & !production")
-    public IdempotencyStore inMemoryIdempotencyStore(
-            IdempotencyProperties properties
-    ) {
-        return new InMemoryIdempotencyStore(
-                properties.maxEntries(),
-                properties.maxResponseBytes(),
-                properties.retention()
-        );
-    }
+	@Bean
+	@Profile("in-memory & !production")
+	public IdempotencyStore inMemoryIdempotencyStore(IdempotencyProperties properties) {
+		return new InMemoryIdempotencyStore(properties.maxEntries(), properties.maxResponseBytes(),
+				properties.retention());
+	}
 }

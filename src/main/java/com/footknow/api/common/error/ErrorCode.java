@@ -45,10 +45,8 @@ public enum ErrorCode {
 	IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT,
 			"A request with this idempotency key is still being processed."),
 
-	IDEMPOTENCY_OUTCOME_UNKNOWN(
-        HttpStatus.CONFLICT,
-        "The outcome of the original request cannot currently be confirmed."
-	);
+	IDEMPOTENCY_OUTCOME_UNKNOWN(HttpStatus.CONFLICT,
+			"The outcome of the original request cannot currently be confirmed.");
 
 	private final HttpStatus status;
 	private final String message;
