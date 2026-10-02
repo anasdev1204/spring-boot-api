@@ -75,5 +75,6 @@ app:
           window: 1m
   idempotency:
     max-entries: 1000
+    max-request-bytes: 65536
     max-response-bytes: 65536
     retention: 24h

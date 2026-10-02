@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.footknow.api.common.ratelimit.RateLimited;
 import com.footknow.api.common.ratelimit.RateLimitCategory;
+import com.footknow.api.common.idempotency.Idempotent;
 
 @RestController
 @RequestMapping(value = "/api/v1/leagues", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -26,6 +27,7 @@ public class LeagueController {
 		this.mapper = mapper;
 	}
 
+	@Idempotent(operation = "league.create.v1")
 	@RateLimited(category = RateLimitCategory.WRITE)
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<ApiResponse<LeagueResponse>> create(@Valid @RequestBody CreateLeagueRequest request) {

@@ -56,7 +56,11 @@ class FootballCreateEndpointsTest {
 
 	private MockHttpServletRequestBuilder authenticatedPost(String path) {
 		return post(path)
-				.with(jwt().jwt(token -> token.subject("user_endpoint_test").claim("azp", "http://localhost:3000")));
+				.with(jwt().jwt(token -> token.subject("user_endpoint_test").claim("azp", "http://localhost:3000")))
+				.header(
+						"Idempotency-Key",
+						UUID.randomUUID().toString()
+				);
 	}
 
 	@ParameterizedTest

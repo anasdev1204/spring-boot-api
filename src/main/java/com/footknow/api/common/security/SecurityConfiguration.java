@@ -20,6 +20,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.footknow.api.common.idempotency.IdempotencyBodyWrappingFilter;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
+
 import java.time.Duration;
 import java.util.List;
 
@@ -42,7 +45,8 @@ public class SecurityConfiguration {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder,
 			CorsConfigurationSource corsConfigurationSource,
-			ApiAuthenticationEntryPointHandler authenticationEntryPoint, ApiAccessDeniedHandler accessDeniedHandler)
+			ApiAuthenticationEntryPointHandler authenticationEntryPoint, ApiAccessDeniedHandler accessDeniedHandler,
+			IdempotencyBodyWrappingFilter idempotencyBodyWrappingFilter)
 			throws Exception {
 		JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
 
@@ -71,6 +75,11 @@ public class SecurityConfiguration {
 						.authenticationEntryPoint(authenticationEntryPoint).accessDeniedHandler(accessDeniedHandler)
 						.jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)));
 
+		http.addFilterAfter(
+				idempotencyBodyWrappingFilter,
+				AuthorizationFilter.class
+		);
+
 		return http.build();
 	}
 
@@ -81,8 +90,20 @@ public class SecurityConfiguration {
 		configuration.setAllowedOrigins(List.copyOf(properties.authorizedParties()));
 
 		configuration.setAllowedMethods(List.of("POST", "OPTIONS"));
-		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-		configuration.setExposedHeaders(List.of("Retry-After"));
+		configuration.setAllowedHeaders(
+				List.of(
+						"Authorization",
+						"Content-Type",
+						"Idempotency-Key"
+				)
+		);
+
+		configuration.setExposedHeaders(
+				List.of(
+						"Retry-After",
+						"Idempotency-Replayed"
+				)
+		);
 
 		configuration.setAllowCredentials(false);
 		configuration.setMaxAge(3600L);
