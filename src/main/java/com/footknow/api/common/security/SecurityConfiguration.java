@@ -82,6 +82,9 @@ public class SecurityConfiguration {
 
 		configuration.setAllowedMethods(List.of("POST", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+		configuration.setExposedHeaders(
+				List.of("Retry-After")
+		);
 
 		configuration.setAllowCredentials(false);
 		configuration.setMaxAge(3600L);
