@@ -1068,3 +1068,423 @@ public class CurrentCaller {
 }
 ```
 
+## Adding rate limiting
+
+To do so first add `RateLimited.java` interface to represent a rate limited service. This interface will be used to mark services that are rate limited.
+
+```java
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface RateLimited {
+
+    RateLimitCategory category();
+}
+```
+
+Then we add a `RateLimitCategory.java` enum to represent the different categories of rate limiting. This enum will be used to categorize the rate limited services.
+
+```java
+public enum RateLimitCategory {
+    READ,
+    WRITE
+}
+```
+
+Then we add a `RateLimitProperties.java` interface to represent a service that can check if a caller is rate limited. This interface will be used to check if a caller is rate limited before allowing them to access a rate limited service.
+
+```java
+@Validated
+@ConfigurationProperties(prefix = "app.rate-limit")
+public record RateLimitProperties(
+        @NotNull
+        RateLimitTier defaultTier,
+
+        @Min(1)
+        @Max(1_000_000)
+        int maxKeys,
+
+        Map<@NotBlank String, @NotNull RateLimitTier> userTiers,
+
+        @NotEmpty
+        Map<
+                RateLimitTier,
+                @NotEmpty Map<
+                        RateLimitCategory,
+                        @NotNull @Valid Policy
+                        >
+                > policies
+) {
+
+    public RateLimitProperties {
+        userTiers = userTiers == null
+                ? Map.of()
+                : Map.copyOf(userTiers);
+    }
+
+    @AssertTrue(message =
+            "Every rate-limit tier must define a policy for every category")
+    public boolean isPolicyMatrixComplete() {
+        if (policies == null) {
+            return false;
+        }
+
+        for (RateLimitTier tier : RateLimitTier.values()) {
+            Map<RateLimitCategory, Policy> categories = policies.get(tier);
+
+            if (categories == null) {
+                return false;
+            }
+
+            for (RateLimitCategory category : RateLimitCategory.values()) {
+                if (categories.get(category) == null) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public Policy policyFor(
+            RateLimitTier tier,
+            RateLimitCategory category
+    ) {
+        return policies.get(tier).get(category);
+    }
+
+    public record Policy(
+            @Min(1)
+            long requests,
+
+            @NotNull
+            Duration window
+    ) {
+
+        @AssertTrue(message =
+                "Rate-limit windows must be between one second and one day")
+        public boolean isWindowValid() {
+            return window != null
+                    && window.compareTo(Duration.ofSeconds(1)) >= 0
+                    && window.compareTo(Duration.ofDays(1)) <= 0;
+        }
+    }
+}
+```
+
+Then we add `RateLimitResolver.java` interface to represent a service that can resolve the rate limit tier for a caller. This interface will be used to determine the rate limit tier for a caller before allowing them to access a rate limited service.
+
+```java
+@Component
+public class RateLimitTierResolver {
+
+    private final RateLimitProperties properties;
+
+    public RateLimitTierResolver(RateLimitProperties properties) {
+        this.properties = properties;
+    }
+
+    public RateLimitTier resolve(String clerkUserId) {
+        return properties.userTiers().getOrDefault(
+                clerkUserId,
+                properties.defaultTier()
+        );
+    }
+}
+```
+
+Then we add a `RateLimitDecision.java` class to represent a decision made by the rate limit service. This class will be used to indicate whether a caller is allowed to access a rate limited service or not.
+
+```java
+public record RateLimitDecision(
+        boolean allowed,
+        long retryAfterSeconds
+) {
+
+    public RateLimitDecision {
+        if (allowed && retryAfterSeconds != 0) {
+            throw new IllegalArgumentException(
+                    "Allowed decisions must have zero retry delay"
+            );
+        }
+
+        if (!allowed && retryAfterSeconds < 1) {
+            throw new IllegalArgumentException(
+                    "Rejected decisions must have a positive retry delay"
+            );
+        }
+    }
+
+    public static RateLimitDecision permit() {
+        return new RateLimitDecision(true, 0);
+    }
+
+    public static RateLimitDecision reject(long retryAfterSeconds) {
+        return new RateLimitDecision(false, retryAfterSeconds);
+    }
+}
+```
+
+We then add an in-memory rate limit store `InMemoryRateLimitStore.java` class to represent a service that can store rate limit information in memory. This class will be used to store rate limit information for callers in memory.
+
+```java
+public final class InMemoryRateLimitStore implements RateLimitStore {
+
+    private static final long NANOS_PER_SECOND = 1_000_000_000L;
+
+    private final int maxKeys;
+    private final LongSupplier ticker;
+    private final Map<Key, Window> windows = new HashMap<>();
+
+    public InMemoryRateLimitStore(int maxKeys) {
+        this(maxKeys, System::nanoTime);
+    }
+
+    // Package-private so tests can control time without sleeping.
+    InMemoryRateLimitStore(int maxKeys, LongSupplier ticker) {
+        if (maxKeys < 1) {
+            throw new IllegalArgumentException("maxKeys must be positive");
+        }
+
+        this.maxKeys = maxKeys;
+        this.ticker = Objects.requireNonNull(ticker);
+    }
+
+    @Override
+    public synchronized RateLimitDecision tryAcquire(
+            String callerId,
+            RateLimitCategory category,
+            RateLimitProperties.Policy policy
+    ) {
+        Objects.requireNonNull(callerId);
+        Objects.requireNonNull(category);
+        Objects.requireNonNull(policy);
+
+        if (callerId.isBlank()) {
+            throw new IllegalArgumentException("callerId must not be blank");
+        }
+
+        if (policy.requests() < 1 || !policy.isWindowValid()) {
+            throw new IllegalArgumentException("Invalid rate-limit policy");
+        }
+
+        long now = ticker.getAsLong();
+        Key key = new Key(callerId, category);
+        Window window = windows.get(key);
+
+        if (window != null && window.expired(now)) {
+            windows.remove(key);
+            window = null;
+        }
+
+        if (window == null) {
+            if (windows.size() >= maxKeys) {
+                removeExpiredWindows(now);
+            }
+
+            if (windows.size() >= maxKeys) {
+                throw new ApiException(ErrorCode.SERVICE_UNAVAILABLE);
+            }
+
+            window = new Window(
+                    now,
+                    policy.window().toNanos(),
+                    policy.requests()
+            );
+
+            windows.put(key, window);
+        }
+
+        if (window.used >= window.limit) {
+            return RateLimitDecision.reject(
+                    window.retryAfterSeconds(now)
+            );
+        }
+
+        window.used++;
+
+        return RateLimitDecision.permit();
+    }
+
+    private void removeExpiredWindows(long now) {
+        windows.entrySet().removeIf(
+                entry -> entry.getValue().expired(now)
+        );
+    }
+
+    private record Key(
+            String callerId,
+            RateLimitCategory category
+    ) {
+    }
+
+    private static final class Window {
+
+        private final long startedAtNanos;
+        private final long durationNanos;
+        private final long limit;
+
+        private long used;
+
+        private Window(
+                long startedAtNanos,
+                long durationNanos,
+                long limit
+        ) {
+            this.startedAtNanos = startedAtNanos;
+            this.durationNanos = durationNanos;
+            this.limit = limit;
+        }
+
+        private boolean expired(long now) {
+            return now - startedAtNanos >= durationNanos;
+        }
+
+        private long retryAfterSeconds(long now) {
+            long remainingNanos =
+                    durationNanos - (now - startedAtNanos);
+
+            long wholeSeconds = remainingNanos / NANOS_PER_SECOND;
+
+            if (remainingNanos % NANOS_PER_SECOND != 0) {
+                wholeSeconds++;
+            }
+
+            return Math.max(1, wholeSeconds);
+        }
+    }
+}
+```
+
+We then add an interceptor `RateLimitInterceptor.java` class to represent a service that can intercept HTTP requests and apply rate limiting. This class will be used to intercept HTTP requests and apply rate limiting based on the caller's rate limit tier.
+
+```java
+@Component
+public class RateLimitInterceptor implements HandlerInterceptor {
+
+    private final CurrentCaller currentCaller;
+    private final RateLimitTierResolver tierResolver;
+    private final RateLimitProperties properties;
+    private final RateLimitStore store;
+
+    public RateLimitInterceptor(
+            CurrentCaller currentCaller,
+            RateLimitTierResolver tierResolver,
+            RateLimitProperties properties,
+            RateLimitStore store
+    ) {
+        this.currentCaller = currentCaller;
+        this.tierResolver = tierResolver;
+        this.properties = properties;
+        this.store = store;
+    }
+
+    @Override
+    public boolean preHandle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler
+    ) {
+        // Do not charge again for async or error redispatch.
+        if (request.getDispatcherType() != DispatcherType.REQUEST) {
+            return true;
+        }
+
+        if (!(handler instanceof HandlerMethod handlerMethod)) {
+            return true;
+        }
+
+        RateLimited annotation =
+                handlerMethod.getMethodAnnotation(RateLimited.class);
+
+        if (annotation == null) {
+            annotation = AnnotatedElementUtils.findMergedAnnotation(
+                    handlerMethod.getBeanType(),
+                    RateLimited.class
+            );
+        }
+
+        if (annotation == null) {
+            return true;
+        }
+
+        String callerId = currentCaller.userId();
+
+        RateLimitTier tier = tierResolver.resolve(callerId);
+        RateLimitCategory category = annotation.category();
+
+        RateLimitDecision decision = store.tryAcquire(
+                callerId,
+                category,
+                properties.policyFor(tier, category)
+        );
+
+        if (!decision.allowed()) {
+            throw new RateLimitExceededException(
+                    decision.retryAfterSeconds()
+            );
+        }
+
+        return true;
+    }
+}
+```
+
+Finally we add a configuration `RateLimitConfiguration.java` class to register the `RateLimitInterceptor` with Spring MVC.
+
+```java
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(RateLimitProperties.class)
+public class RateLimitConfiguration {
+
+    @Bean
+    @Profile("in-memory & !production")
+    public RateLimitStore inMemoryRateLimitStore(
+            RateLimitProperties properties
+    ) {
+        return new InMemoryRateLimitStore(properties.maxKeys());
+    }
+
+    @Bean
+    public WebMvcConfigurer rateLimitWebMvcConfigurer(
+            RateLimitInterceptor interceptor
+    ) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(interceptor)
+                        .addPathPatterns("/api/v1/**");
+            }
+        };
+    }
+}
+```
+
+Now to configure the rate limit properties, we need to add the following to the `application.yml` file:
+
+```yaml
+app:
+  rate-limit:
+    default-tier: BASIC
+
+    max-keys: 10000
+
+    user-tiers: {}
+
+    policies:
+      BASIC:
+        READ:
+          requests: 120
+          window: 1m
+        WRITE:
+          requests: 30
+          window: 1m
+
+      PREMIUM:
+        READ:
+          requests: 600
+          window: 1m
+        WRITE:
+          requests: 120
+          window: 1m
+```
+
