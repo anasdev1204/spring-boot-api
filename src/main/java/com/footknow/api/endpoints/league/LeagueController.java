@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.footknow.api.common.ratelimit.RateLimited;
+import com.footknow.api.common.ratelimit.RateLimitCategory;
+
 @RestController
 @RequestMapping(value = "/api/v1/leagues", produces = MediaType.APPLICATION_JSON_VALUE)
 public class LeagueController {
@@ -23,6 +26,7 @@ public class LeagueController {
 		this.mapper = mapper;
 	}
 
+	@RateLimited(category = RateLimitCategory.WRITE)
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<ApiResponse<LeagueResponse>> create(@Valid @RequestBody CreateLeagueRequest request) {
 		League entity = service.create(request);

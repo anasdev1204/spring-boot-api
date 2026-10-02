@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.footknow.api.common.response.ApiResponse;
 
+import com.footknow.api.common.ratelimit.RateLimited;
+import com.footknow.api.common.ratelimit.RateLimitCategory;
+
 @RestController
 @RequestMapping(value = "/api/v1/coaches", produces = MediaType.APPLICATION_JSON_VALUE)
 public class CoachController {
@@ -23,6 +26,7 @@ public class CoachController {
 		this.mapper = mapper;
 	}
 
+	@RateLimited(category = RateLimitCategory.WRITE)
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<ApiResponse<CoachResponse>> create(@Valid @RequestBody CreateCoachRequest request) {
 		Coach entity = service.create(request);
